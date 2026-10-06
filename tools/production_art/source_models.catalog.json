@@ -1,0 +1,2259 @@
+{
+  "assets": [
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "wanderer",
+      "kind": "character",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/wanderer.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "time_guardian",
+      "kind": "character",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/time_guardian.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "void_walker",
+      "kind": "character",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_walker.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "primordial_knight",
+      "kind": "character",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/primordial_knight.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "time_lord",
+      "kind": "character",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/time_lord.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "ruin_king",
+      "kind": "boss",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 80,
+        "ortho_scale": 3,
+        "pivot": [
+          40,
+          72
+        ],
+        "resolution": 160,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/ruin_king.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "forest_heart",
+      "kind": "boss",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 80,
+        "ortho_scale": 3,
+        "pivot": [
+          40,
+          72
+        ],
+        "resolution": 160,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/forest_heart.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "time_sovereign",
+      "kind": "boss",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 80,
+        "ortho_scale": 3,
+        "pivot": [
+          40,
+          72
+        ],
+        "resolution": 160,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/time_sovereign.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "forge_colossus",
+      "kind": "boss",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 80,
+        "ortho_scale": 3,
+        "pivot": [
+          40,
+          72
+        ],
+        "resolution": 160,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/forge_colossus.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "attack": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "cast": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "death": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "hurt": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        },
+        "move": {
+          "fps": 8,
+          "frames": [
+            1,
+            5,
+            9,
+            13
+          ]
+        }
+      },
+      "id": "void_throne",
+      "kind": "boss",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 80,
+        "ortho_scale": 3,
+        "pivot": [
+          40,
+          72
+        ],
+        "resolution": 160,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_throne.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "shattered_sentinel",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/shattered_sentinel.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "corrosive_moth",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/corrosive_moth.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "stone_shell_strider",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/stone_shell_strider.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "ruins_wraith",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/ruins_wraith.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "rift_watcher",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/rift_watcher.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "void_hunter",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_hunter.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "void_archer",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_archer.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "bramble_mage",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/bramble_mage.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "void_spore",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_spore.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "forest_caller",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/forest_caller.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "shadow_lurker",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/shadow_lurker.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "chrono_guard",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/chrono_guard.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "rift_weaver",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/rift_weaver.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "blink_striker",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/blink_striker.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "rewind_priest",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/rewind_priest.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "chrono_storm_elemental",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/chrono_storm_elemental.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "eternal_hound",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/eternal_hound.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "forge_titan",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/forge_titan.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "void_web_weaver",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/void_web_weaver.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "phase_ranger",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/phase_ranger.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "chaos_amalgam",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/chaos_amalgam.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    },
+    {
+      "animations": {
+        "active": {
+          "fps": 8,
+          "frames": [
+            13
+          ]
+        },
+        "idle": {
+          "fps": 8,
+          "frames": [
+            1
+          ]
+        },
+        "recovery": {
+          "fps": 8,
+          "frames": [
+            19
+          ]
+        },
+        "warning": {
+          "fps": 8,
+          "frames": [
+            7
+          ]
+        }
+      },
+      "id": "plane_ripper",
+      "kind": "enemy",
+      "render": {
+        "alpha_threshold": 128,
+        "camera_direction": [
+          1,
+          -4,
+          1
+        ],
+        "frame_size": 48,
+        "ortho_scale": 3,
+        "pivot": [
+          24,
+          40
+        ],
+        "resolution": 96,
+        "world_anchor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "source": {
+        "acquired_at": null,
+        "file": "source_models/plane_ripper.glb",
+        "license": null,
+        "note": "No model acquired. Record actual rights and choose phase poses before building.",
+        "provider": "tripo",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms"
+      },
+      "status": "awaiting_model"
+    }
+  ],
+  "palette": [
+    "#111619",
+    "#1b2224",
+    "#242d2d",
+    "#374342",
+    "#697771",
+    "#abb8ac",
+    "#edf0dc",
+    "#79baa1",
+    "#4f927e",
+    "#61d5e7",
+    "#2c8da0",
+    "#e5bd69",
+    "#a4773e",
+    "#f07065",
+    "#a9464f",
+    "#df9b65",
+    "#9b5e48",
+    "#b897d7",
+    "#76579a",
+    "#3e4f68",
+    "#6d9fbd",
+    "#c9d7d2",
+    "#4b5d52",
+    "#8fae75",
+    "#3e3a49",
+    "#6b5064",
+    "#d36a9b",
+    "#e8d5a5",
+    "#2b3538",
+    "#53635d",
+    "#c17d54"
+  ],
+  "schema_id": "plane_walker_source_model_v1",
+  "schema_version": 1
+}

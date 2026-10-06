@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -14,8 +15,13 @@ import tempfile
 from pathlib import Path
 
 STATES = ("idle", "move", "attack", "cast", "hurt", "death")
+ENEMY_PHASES = ("idle", "warning", "active", "recovery")
 CHARACTERS = ("wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord")
 BOSSES = ("ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne")
+ROOT = Path(__file__).resolve().parents[2]
+ENEMY_DEFINITIONS = json.loads((ROOT / "data/content_packs/base/content/enemies.json").read_text())
+KIND_IDS = {"character": CHARACTERS, "boss": BOSSES,
+            "enemy": tuple(row["id"] for row in ENEMY_DEFINITIONS)}
 STATUSES = ("ready", "awaiting_model", "awaiting_animation", "license_pending")
 
 
@@ -30,6 +36,49 @@ def _check(condition, message):
 
 def _number(value):
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def states_for(row):
+    return ENEMY_PHASES if row["kind"] == "enemy" else STATES
+
+
+def select_assets(manifest, asset_ids=None):
+    selected = copy.deepcopy(manifest)
+    if asset_ids is not None:
+        _check(isinstance(selected, dict) and isinstance(selected.get("assets"), list)
+               and all(isinstance(row, dict) and isinstance(row.get("id"), str) for row in selected["assets"]), "manifest requires asset descriptors")
+        _check(isinstance(asset_ids, (list, tuple)) and asset_ids
+               and all(isinstance(identity, str) for identity in asset_ids)
+               and len(set(asset_ids)) == len(asset_ids), "select distinct asset IDs")
+        _check(set(asset_ids) <= {row["id"] for row in selected["assets"]}, "selected asset ID is missing")
+        selected["assets"] = [row for row in selected["assets"] if row["id"] in asset_ids]
+    return selected
+
+
+def catalog(kind="all"):
+    _check(kind == "all" or kind in KIND_IDS, "unknown catalog kind")
+    palette = json.loads((ROOT / "assets/production/palettes/plane_walker_modern.json").read_text())["colors"]
+    rows = []
+    for family, identities in KIND_IDS.items():
+        if kind != "all" and family != kind:
+            continue
+        size = 80 if family == "boss" else 48
+        for identity in identities:
+            states = ENEMY_PHASES if family == "enemy" else STATES
+            rows.append({
+                "id": identity, "kind": family, "status": "awaiting_model",
+                "source": {"provider": "tripo", "file": f"source_models/{identity}.glb",
+                           "rights_status": "pending", "terms_url": "https://www.tripo3d.com/terms",
+                           "acquired_at": None, "license": None,
+                           "note": "No model acquired. Record actual rights and choose phase poses before building."},
+                "render": {"frame_size": size, "resolution": size * 2,
+                           "pivot": [size // 2, size - 8], "world_anchor": [0, 0, 0],
+                           "camera_direction": [1, -4, 1], "ortho_scale": 3, "alpha_threshold": 128},
+                "animations": {state: {"frames": [1 + index * 6] if family == "enemy" else [1, 5, 9, 13], "fps": 8}
+                               for index, state in enumerate(states)},
+            })
+    return {"schema_id": "plane_walker_source_model_v1", "schema_version": 1,
+            "palette": palette, "assets": rows}
 
 
 def _local_file(root, filename):
@@ -75,10 +124,9 @@ def inspect_manifest(manifest, root):
     for row in assets:
         _check(isinstance(row, dict), "asset must be an object")
         identity, kind = row.get("id"), row.get("kind")
-        _check(identity in CHARACTERS + BOSSES and identity not in seen, "unknown or duplicate actor id")
+        _check(kind in KIND_IDS and identity in KIND_IDS[kind] and identity not in seen, "unknown, duplicate or mismatched actor id")
         seen.add(identity)
-        expected_size = 48 if identity in CHARACTERS else 80
-        _check(kind == ("character" if expected_size == 48 else "boss"), "actor kind does not match runtime")
+        expected_size = 80 if kind == "boss" else 48
         status = row.get("status")
         _check(status in STATUSES, "unknown asset status")
         _validate_source(row.get("source"), root, status == "ready")
@@ -96,19 +144,21 @@ def inspect_manifest(manifest, root):
         _check(isinstance(pivot, list) and len(pivot) == 2 and all(type(n) is int and 0 < n < expected_size for n in pivot), "pivot must lie inside frame")
         _check(type(render.get("alpha_threshold")) is int and 1 <= render["alpha_threshold"] <= 255, "alpha_threshold must be between 1 and 255")
         animations = row.get("animations")
-        _check(isinstance(animations, dict) and set(animations) == set(STATES), "all six runtime states are required")
-        for state in STATES:
+        states = states_for(row)
+        samples = 1 if kind == "enemy" else 4
+        _check(isinstance(animations, dict) and set(animations) == set(states), "all runtime states or phases are required")
+        for state in states:
             clip = animations[state]
             _check(isinstance(clip, dict), f"invalid {state} clip")
             frames = clip.get("frames")
-            _check(isinstance(frames, list) and len(frames) == 4 and all(type(n) is int and 0 <= n <= 100000 for n in frames), f"{state} requires four frame samples")
+            _check(isinstance(frames, list) and len(frames) == samples and all(type(n) is int and 0 <= n <= 100000 for n in frames), f"{state} requires {samples} frame samples")
             _check(type(clip.get("fps")) is int and 1 <= clip["fps"] <= 30, f"invalid {state} fps")
             if "action" in clip:
                 _check(isinstance(clip["action"], str) and bool(clip["action"]), f"invalid {state} action")
             if "source" in clip:
                 _validate_source(clip["source"], root, status == "ready")
                 _check(bool(clip.get("action")), "separate animation source requires an exact action name")
-        report.append({"id": identity, "status": status, "provider": row["source"]["provider"]})
+        report.append({"id": identity, "kind": kind, "status": status, "provider": row["source"]["provider"]})
     return {"ready": all(row["status"] == "ready" for row in report), "assets": report}
 
 
@@ -143,10 +193,15 @@ def pack_asset(row, frames, output):
     from PIL import Image
 
     size = row["render"]["frame_size"]
-    _check(len(frames) == 24, "actor atlas requires exactly 24 frames")
-    for index, state in enumerate(STATES):
-        _check(len({frame.tobytes() for frame in frames[index * 4:index * 4 + 4]}) >= 3, f"{state} needs at least three distinct poses")
-    atlas = Image.new("RGBA", (size * 4, size * 6))
+    enemy = row["kind"] == "enemy"
+    rows = 1 if enemy else 6
+    _check(len(frames) == rows * 4, f"atlas requires exactly {rows * 4} frames")
+    if enemy:
+        _check(len({frame.tobytes() for frame in frames}) >= 3, "enemy phases need at least three distinct poses")
+    else:
+        for index, state in enumerate(STATES):
+            _check(len({frame.tobytes() for frame in frames[index * 4:index * 4 + 4]}) >= 3, f"{state} needs at least three distinct poses")
+    atlas = Image.new("RGBA", (size * 4, size * rows))
     bounds = []
     for index, image in enumerate(frames):
         _check(image.mode == "RGBA" and image.size == (size, size), "unexpected normalized frame")
@@ -159,17 +214,21 @@ def pack_asset(row, frames, output):
     output.mkdir(parents=True, exist_ok=True)
     path = output / f"{row['id']}.png"
     atlas.save(path, optimize=False)
-    return {
+    descriptor = {
         "id": row["id"], "kind": row["kind"], "path": path.name,
-        "columns": 4, "rows": 6, "frames_per_state": 4,
+        "columns": 4, "rows": rows, "frames_per_state": 1 if enemy else 4,
         "frame_width": size, "frame_height": size,
-        "width": size * 4, "height": size * 6, "facing": "right", "filter": "nearest",
-        "fps": {state: row["animations"][state]["fps"] for state in STATES},
+        "width": size * 4, "height": size * rows, "facing": "right", "filter": "nearest",
+        "fps": {state: row["animations"][state]["fps"] for state in states_for(row)},
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "pivot": row["render"]["pivot"], "frame_bounds": bounds,
         "provenance": {**row["source"], "kind": "model_rendered_pixel_art", "status": "technical_preview",
                        "animations": row["animations"]},
     }
+    if enemy:
+        descriptor["phases"] = list(ENEMY_PHASES)
+        descriptor["floor_id"] = next(definition["floor_id"] for definition in ENEMY_DEFINITIONS if definition["id"] == row["id"])
+    return descriptor
 
 
 def _import_model(path):
@@ -214,13 +273,13 @@ def _apply_action(obj, action):
         obj.animation_data.action_slot = action.slots[0]
 
 
-def _render_blender(manifest_path, output):
+def _render_blender(manifest_path, output, source_root=None):
     import bpy
     from bpy_extras.object_utils import world_to_camera_view
     from mathutils import Vector
 
     manifest = json.loads(manifest_path.read_text())
-    root = manifest_path.parent
+    root = source_root or manifest_path.parent
     require_ready(manifest, root)
     for row in manifest["assets"]:
         bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -271,7 +330,7 @@ def _render_blender(manifest_path, output):
             light.rotation_euler = (anchor - light.location).to_track_quat("-Z", "Y").to_euler()
         destination = output / row["id"]
         destination.mkdir(parents=True, exist_ok=True)
-        for state in STATES:
+        for state in states_for(row):
             clip = row["animations"][state]
             imported_animation = []
             if "source" in clip:
@@ -298,12 +357,16 @@ def _render_blender(manifest_path, output):
                 bpy.data.objects.remove(obj, do_unlink=True)
 
 
-def build(manifest_path, output, blender="blender"):
+def build(manifest_path, output, blender="blender", asset_ids=None):
     from PIL import Image
 
     manifest_path = manifest_path.resolve()
-    manifest = json.loads(manifest_path.read_text())
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = select_assets(json.loads(manifest_bytes), asset_ids)
     require_ready(manifest, manifest_path.parent)
+    families = {"enemy" if row["kind"] == "enemy" else "actor" for row in manifest["assets"]}
+    _check(len(families) == 1, "select a single atlas family; enemy and actor atlas families cannot share an output manifest")
+    enemy = families == {"enemy"}
     sources = [row["source"] for row in manifest["assets"]]
     sources.extend(clip["source"] for row in manifest["assets"] for clip in row["animations"].values() if "source" in clip)
     source_hashes = {source["file"]: hashlib.sha256(_local_file(manifest_path.parent, source["file"]).read_bytes()).hexdigest() for source in sources}
@@ -313,8 +376,10 @@ def build(manifest_path, output, blender="blender"):
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="source-model-", dir=output) as directory:
         stage = Path(directory)
+        render_manifest = stage / "selected-manifest.json"
+        render_manifest.write_text(json.dumps(manifest))
         command = [binary, "--background", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1",
-                   "--python", str(Path(__file__).resolve()), "--", "_render", str(manifest_path), str(stage / "raw")]
+                   "--python", str(Path(__file__).resolve()), "--", "_render", str(render_manifest), str(stage / "raw"), str(manifest_path.parent)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=600)
         (output / "blender.log").write_text(result.stdout + result.stderr)
         _check(result.returncode == 0 and "Traceback (most recent call last)" not in result.stdout + result.stderr, "Blender render failed; see blender.log")
@@ -325,15 +390,16 @@ def build(manifest_path, output, blender="blender"):
         descriptors = []
         for row in manifest["assets"]:
             frames = []
-            for state in STATES:
-                for index in range(4):
+            for state in states_for(row):
+                for index in range(len(row["animations"][state]["frames"])):
                     with Image.open(stage / "raw" / row["id"] / f"{state}_{index}.png") as image:
                         frames.append(normalize_frame(image, row["render"]["frame_size"], palette, row["render"]["alpha_threshold"]))
             descriptors.append(pack_asset(row, frames, stage / "packed"))
-        result_manifest = {"schema_id": "plane_walker_actor_atlas_v1", "schema_version": 1,
-                           "states": list(STATES), "assets": descriptors,
+        result_manifest = {"schema_id": "plane_walker_launch_enemy_art_v1" if enemy else "plane_walker_actor_atlas_v1", "schema_version": 1,
+                           "phases" if enemy else "states": list(ENEMY_PHASES if enemy else STATES), "assets": descriptors,
                            "provenance": {"kind": "model_rendered_pixel_art", "status": "technical_preview",
-                                          "source_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest()}}
+                                          "source_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+                                          "selected_assets": [row["id"] for row in manifest["assets"]]}}
         (stage / "packed" / "manifest.json").write_text(json.dumps(result_manifest, indent=2, sort_keys=True) + "\n")
         for path in (stage / "packed").iterdir():
             shutil.copy2(path, output / path.name)
@@ -398,6 +464,10 @@ def main(argv=None):
         if name == "build":
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--blender", default="blender")
+            command.add_argument("--asset", action="append", dest="asset_ids")
+    command = commands.add_parser("catalog")
+    command.add_argument("--kind", choices=("all", *KIND_IDS), default="all")
+    command.add_argument("--output", type=Path, required=True)
     command = commands.add_parser("fixture")
     command.add_argument("--output", type=Path, required=True)
     command.add_argument("--blender", default="blender")
@@ -406,8 +476,13 @@ def main(argv=None):
         result = inspect_manifest(json.loads(args.manifest.read_text()), args.manifest.resolve().parent)
     elif args.command == "fixture":
         result = {"manifest": str(fixture(args.output, args.blender))}
+    elif args.command == "catalog":
+        manifest = catalog(args.kind)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        result = {"manifest": str(args.output), "assets": len(manifest["assets"]), "status": "awaiting_model"}
     else:
-        result = build(args.manifest, args.output, args.blender)
+        result = build(args.manifest, args.output, args.blender, args.asset_ids)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
@@ -415,7 +490,7 @@ if __name__ == "__main__":
     try:
         if "--" in sys.argv and sys.argv[sys.argv.index("--") + 1] == "_render":
             arguments = sys.argv[sys.argv.index("--") + 2:]
-            _render_blender(Path(arguments[0]), Path(arguments[1]))
+            _render_blender(Path(arguments[0]), Path(arguments[1]), Path(arguments[2]) if len(arguments) > 2 else None)
         elif "--" in sys.argv and sys.argv[sys.argv.index("--") + 1] == "_fixture":
             _fixture_blender(Path(sys.argv[-1]))
         else:

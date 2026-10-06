@@ -33,6 +33,84 @@ def fixture_manifest():
 
 
 class SourceModelPipelineTest(unittest.TestCase):
+    def test_catalog_covers_runtime_content_with_explicit_pending_sources(self):
+        manifest = pipeline.catalog("all")
+        definitions = json.loads((ROOT / "data/content_packs/base/content/enemies.json").read_text())
+        enemies = {row["id"] for row in manifest["assets"] if row["kind"] == "enemy"}
+        self.assertEqual(enemies, {row["id"] for row in definitions})
+        self.assertEqual(len(manifest["assets"]), 32)
+        with tempfile.TemporaryDirectory() as directory:
+            report = pipeline.inspect_manifest(manifest, Path(directory))
+        self.assertFalse(report["ready"])
+        self.assertTrue(all(row["status"] == "awaiting_model" for row in report["assets"]))
+        self.assertEqual(len(pipeline.catalog("enemy")["assets"]), 22)
+
+    def test_selection_allows_ready_family_without_pending_assets(self):
+        manifest = pipeline.catalog("all")
+        ready = fixture_manifest()["assets"][0]
+        manifest["assets"][0] = ready
+        selected = pipeline.select_assets(manifest, ["wanderer"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "model.glb").write_bytes(b"fixture")
+            self.assertTrue(pipeline.require_ready(selected, root)["ready"])
+        selected["assets"][0]["source"]["license"] = "changed"
+        self.assertEqual(manifest["assets"][0]["source"]["license"], "CC0-1.0")
+        for identities in (["not_an_actor"], ["wanderer", "wanderer"]):
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline.select_assets(manifest, identities)
+
+    def test_enemy_contract_requires_one_sample_for_each_runtime_phase(self):
+        manifest = pipeline.catalog("enemy")
+        self.assertEqual(pipeline.states_for(manifest["assets"][0]), pipeline.ENEMY_PHASES)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pipeline.inspect_manifest(manifest, root)
+            for mutation in ("states", "count", "kind", "size"):
+                candidate = copy.deepcopy(manifest)
+                row = candidate["assets"][0]
+                if mutation == "states":
+                    row["animations"]["attack"] = row["animations"].pop("active")
+                elif mutation == "count":
+                    row["animations"]["idle"]["frames"] = [1, 2, 3, 4]
+                elif mutation == "kind":
+                    row["kind"] = "character"
+                else:
+                    row["render"]["frame_size"] = 32
+                with self.subTest(mutation=mutation), self.assertRaises(pipeline.PipelineError):
+                    pipeline.inspect_manifest(candidate, root)
+
+    def test_enemy_packing_is_one_row_and_rejects_static_phase_output(self):
+        row = pipeline.catalog("enemy")["assets"][0]
+        frames = []
+        for phase in range(4):
+            image = Image.new("RGBA", (48, 48))
+            ImageDraw.Draw(image).rectangle((21, 10, 26 + phase, 39), fill=(97, 213, 231, 255))
+            frames.append(image)
+        with tempfile.TemporaryDirectory() as directory:
+            descriptor = pipeline.pack_asset(row, frames, Path(directory))
+            self.assertEqual((descriptor["columns"], descriptor["rows"], descriptor["width"], descriptor["height"]), (4, 1, 192, 48))
+            self.assertEqual(descriptor["phases"], list(pipeline.ENEMY_PHASES))
+            self.assertEqual(descriptor["frame_width"], 48)
+            self.assertEqual(len(descriptor["frame_bounds"]), 4)
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline.pack_asset(row, [frames[0]] * 4, Path(directory))
+
+    def test_build_rejects_mixed_atlas_families_before_rendering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "model.glb").write_bytes(b"fixture")
+            manifest = fixture_manifest()
+            enemy = pipeline.catalog("enemy")["assets"][0]
+            enemy["status"] = "ready"
+            enemy["source"] = copy.deepcopy(manifest["assets"][0]["source"])
+            manifest["assets"].append(enemy)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(pipeline.PipelineError, "atlas families"):
+                pipeline.build(path, root / "atlas")
+            self.assertFalse((root / "atlas").exists())
+
     def test_manifest_exposes_missing_models_without_claiming_success(self):
         manifest = fixture_manifest()
         manifest["assets"][0]["status"] = "awaiting_model"
@@ -110,6 +188,31 @@ class SourceModelPipelineTest(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("SOURCE_MODEL_BLENDER_SMOKE"), "opt-in local Blender smoke")
 class SourceModelBlenderSmokeTest(unittest.TestCase):
+    def test_actual_enemy_glb_and_fbx_build_with_other_assets_pending(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = pipeline.fixture(root)
+            fixture = json.loads(path.read_text())
+            manifest = pipeline.catalog("all")
+            enemy = next(row for row in manifest["assets"] if row["kind"] == "enemy")
+            enemy["status"] = "ready"
+            enemy["source"] = fixture["assets"][0]["source"]
+            enemy["render"] = fixture["assets"][0]["render"]
+            enemy["animations"] = {phase: {"frames": [frame], "fps": 8}
+                                   for phase, frame in zip(pipeline.ENEMY_PHASES, (1, 6, 12, 18))}
+            for extension in ("glb", "fbx"):
+                enemy["source"]["file"] = "local_fixture." + extension
+                path.write_text(json.dumps(manifest))
+                output = root / extension
+                result = pipeline.build(path, output, asset_ids=[enemy["id"]])
+                self.assertEqual(result["schema_id"], "plane_walker_launch_enemy_art_v1")
+                self.assertEqual(result["phases"], list(pipeline.ENEMY_PHASES))
+                self.assertEqual(result["assets"][0]["provenance"]["status"], "technical_preview")
+                self.assertEqual(result["provenance"]["selected_assets"], [enemy["id"]])
+                with Image.open(output / (enemy["id"] + ".png")) as atlas:
+                    self.assertEqual(atlas.size, (192, 48))
+                    self.assertEqual(set(atlas.getchannel("A").get_flattened_data()), {0, 255})
+
     def test_actual_glb_import_transparent_render_and_runtime_pack(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,4 +1,4 @@
-# Local 3D Sources to Pixel Actor Atlases
+# Local 3D Sources to Pixel Actor and Enemy Atlases
 
 - Status: Implemented; external source assets pending
 - Last Verified: 2026-10-06
@@ -15,6 +15,8 @@ Install the pinned optional raster dependency with
 python3 tools/production_art/source_model_pipeline.py --help
 python3 tools/production_art/source_model_pipeline.py inspect \
   tools/production_art/source_models.example.json
+python3 tools/production_art/source_model_pipeline.py catalog \
+  --kind all --output build/source-models/catalog.json
 python3 -m unittest tests.contract.presentation.test_source_model_pipeline
 SOURCE_MODEL_BLENDER_SMOKE=1 python3 -m unittest \
   tests.contract.presentation.test_source_model_pipeline
@@ -46,9 +48,14 @@ select a Blender executable. Builds retain `blender.log` for diagnostics.
 ## Source Contract
 
 - Characters use 48x48 frames; Bosses use 80x80 frames.
-- IDs and kinds must match the existing actor runtime.
+- All 22 ordinary enemies use 48x48 frames, in a 192x48 single row.
+- IDs and kinds must match the existing runtime. Ordinary enemy IDs and floor
+  metadata come from `data/content_packs/base/content/enemies.json`.
 - States are `idle`, `move`, `attack`, `cast`, `hurt`, `death`, with four
   explicitly selected source frame numbers per state and 1-30 playback FPS.
+- Ordinary enemies instead require `idle`, `warning`, `active`, `recovery`,
+  with one selected pose per phase. These are phase-driven stills in the existing
+  runtime; their FPS metadata does not introduce a looping animation.
 - `render.resolution` is an integer multiple of frame size; the PNG renders
   use transparent film, fixed Cycles CPU samples/seed and Standard color view.
 - `render.world_anchor`, `camera_direction`, `ortho_scale` and pixel `pivot`
@@ -57,7 +64,30 @@ select a Blender executable. Builds retain `blender.log` for diagnostics.
 - Nearest-neighbor downsampling, hard alpha thresholding, RGB palette matching
   without dithering and zero RGB in transparent pixels produce pixel frames.
 - Empty, clipped, incorrectly sized and nonbinary-alpha frames fail packing;
-  each state must contain at least three distinct rendered frames.
+  each actor state must contain at least three distinct rendered frames.
+  The four ordinary enemy phases must contain at least three distinct poses.
+
+## Full Catalog and Partial Builds
+
+`catalog --kind all` writes 32 pending descriptors: five characters, five Bosses
+and 22 ordinary enemies, using the shared production palette. `--kind character`,
+`boss` or `enemy` narrows the catalog. It does not create or acquire models, and
+its default camera and animation samples require adjustment for the actual asset.
+`source_models.catalog.json` is the retained complete pending catalog.
+
+Build one available source without requiring the rest of the catalog to be ready:
+
+```bash
+python3 tools/production_art/source_model_pipeline.py build \
+  build/source-models/catalog.json --asset shattered_sentinel \
+  --output build/source-models/enemy-preview
+```
+
+Repeat `--asset` for several assets. Character and Boss atlases share a manifest
+family; ordinary enemies require a separate output manifest. A mixed build fails
+before Blender runs. Output provenance retains the original manifest SHA-256 and
+the exact selected IDs. The filtered render manifest is staged separately while
+all local source paths remain relative to the original manifest directory.
 
 For a model with embedded animations, add `action: "ExactBlenderActionName"`
 to the desired state. Omitting `action` uses the imported default animation
@@ -78,6 +108,12 @@ source/animation provenance. The manifest is structurally compatible with
 `ActorAtlasProjection`; a partial preview does not replace the complete actor
 library. Build into `build/` first, then merge reviewed actor descriptors and
 PNGs into the production library in a separate reviewed change.
+
+Ordinary enemy output instead uses `plane_walker_launch_enemy_art_v1`, with
+four columns, one row, `phases` and authoritative `floor_id` metadata. It matches
+the `Sprite2D.hframes = 4` phase projection of `LaunchHostileActor`. The local
+GLB/FBX smoke covers both runtime families and building one enemy while the other
+31 catalog entries remain pending.
 
 Godot's current sprite is centered by the runtime, so the pivot metadata
 records the consistent location inside each cell; it does not automatically
