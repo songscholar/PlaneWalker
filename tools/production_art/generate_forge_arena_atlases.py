@@ -22,7 +22,8 @@ def frame(kind: str, phase: int) -> Image.Image:
     image = Image.new("RGBA", (48, 48))
     draw = ImageDraw.Draw(image)
     if kind == "anvil":
-        draw.ellipse((6, 29, 42, 43), fill=(19, 22, 27, 150))
+        # A hard-edged ground shadow keeps the atlas valid at nearest filtering.
+        draw.ellipse((6, 29, 42, 43), fill=INK)
         if phase == 2:
             draw.polygon(((9, 30), (20, 25), (25, 30), (36, 28), (41, 35), (32, 40), (12, 39)), fill=INK)
             draw.polygon(((12, 31), (18, 28), (22, 32), (18, 35)), fill=STEEL)

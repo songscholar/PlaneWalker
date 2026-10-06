@@ -115,7 +115,9 @@ def landmark(kind: str) -> Image.Image:
     image = Image.new("RGBA", (64, 64))
     draw = ImageDraw.Draw(image)
     stone, shadow = (105, 124, 119), (56, 74, 78)
-    draw.ellipse((8, 49, 55, 58), fill=(18, 23, 25, 150))
+    # Keep the landmark shadow as an opaque palette step; partial alpha reads as
+    # a blur once the 64px atlas is scaled with nearest filtering.
+    draw.ellipse((8, 49, 55, 58), fill=INK)
     if kind in ("combat", "elite", "boss"):
         draw.polygon(((9, 45), (18, 39), (45, 39), (55, 45), (47, 56), (16, 56)), fill=INK)
         draw.polygon(((13, 45), (20, 42), (43, 42), (50, 45), (44, 52), (19, 52)), fill=stone)

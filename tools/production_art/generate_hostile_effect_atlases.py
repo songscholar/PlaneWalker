@@ -85,9 +85,11 @@ def pool(kind: str, phase: int) -> Image.Image:
     dark, mid, light = PALETTES[kind]
     inset = phase % 2
     draw.ellipse((3, 6, 29, 27), fill=INK)
-    draw.ellipse((5, 8, 27, 25), fill=dark[:3] + (170,))
+    # Pixel art uses binary alpha. Keep the pool's depth in the palette instead
+    # of introducing a translucent antialiased shadow.
+    draw.ellipse((5, 8, 27, 25), fill=dark)
     draw.ellipse((6 + inset, 9 + inset, 26 - inset, 24 - inset), outline=mid, width=2)
-    draw.ellipse((10, 12, 22, 21), outline=mid[:3] + (210,), width=1)
+    draw.ellipse((10, 12, 22, 21), outline=mid, width=1)
     draw.polygon([(16, 10 + phase), (21, 16), (16, 22 - phase), (11, 16)], outline=light)
     for x, y in ((7 + phase, 15), (22 - phase, 20), (16, 7 + phase)):
         draw.rectangle((x, y, x + 1, y + 1), fill=light)
