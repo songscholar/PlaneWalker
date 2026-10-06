@@ -66,7 +66,7 @@ func _capture(suite: RefCounted, hub: Node, viewport: SubViewport, id: String, l
 			scroll = scroll.get_parent()
 		if in_scroll:
 			continue
-		suite.assert_true(bounds.encloses(control.get_global_rect()), "native chrome stays inside viewport: " + str([id, locale, text_scale, viewport.size, control.name]))
+		suite.assert_true(bounds.encloses(control.get_global_rect()), "native chrome stays inside viewport: " + str([id, locale, text_scale, viewport.size, control.name, control.get_global_rect(), control.get_combined_minimum_size()]))
 		if control is Label or control is Button or control is LineEdit:
 			suite.assert_true(control.get_combined_minimum_size().x <= control.size.x + 1 and control.get_combined_minimum_size().y <= control.size.y + 1, "native localized chrome fits: " + str([id, locale, text_scale, viewport.size, control.name]))
 	if not screenshots:

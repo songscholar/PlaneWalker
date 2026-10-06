@@ -28,6 +28,8 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_layout()
+	resized.connect(_fit_panel)
+	_fit_panel()
 	visible = false
 
 
@@ -125,9 +127,12 @@ func _build_layout() -> void:
 	safe_area.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side: String in ["left", "top", "right", "bottom"]:
 		safe_area.add_theme_constant_override("margin_%s" % side, 16)
+	var center := Control.new()
+	center.name = "Center"
+	safe_area.add_child(center)
 	panel_root = PanelContainer.new()
 	panel_root.name = "PanelRoot"
-	safe_area.add_child(panel_root)
+	center.add_child(panel_root)
 	var style := panel_root.get_theme_stylebox("panel").duplicate() as StyleBox
 	style.content_margin_left = 12
 	style.content_margin_right = 12
@@ -176,6 +181,15 @@ func _build_layout() -> void:
 	back_button.add_theme_font_size_override("font_size", 12)
 	back_button.pressed.connect(_request_close)
 	footer.add_child(back_button)
+
+
+func _fit_panel() -> void:
+	if is_instance_valid(panel_root):
+		var available := Vector2(maxf(0, size.x - 32), maxf(0, size.y - 32))
+		var extent := Vector2(minf(616, available.x), minf(560, available.y))
+		panel_root.custom_minimum_size = extent
+		panel_root.size = extent
+		panel_root.position = (available - extent) / 2
 
 
 func _label(text: String, node_name: String, font_size: int = 12) -> Label:

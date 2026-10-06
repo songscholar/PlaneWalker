@@ -1,0 +1,5 @@
+keys,en,zh_CN
+UI_FINISH_VITALS,Vitality,生命成长
+UI_FINISH_EXPLORATION,Exploration,探索成长
+UI_FINISH_UNLOCKED,Unlocked,已解锁
+UI_FINISH_REQUIRES_FMT,Requires: %s,前置：%s

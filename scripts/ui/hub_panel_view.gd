@@ -14,6 +14,10 @@ signal challenge_rewards_requested
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
 const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
 const CosmeticsPanel := preload("res://scripts/ui/hub_cosmetics_panel.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
+const Page := preload("res://scripts/ui/hub_pages/hub_page_layout.gd")
+const BRANCH_LABELS := {"W": "UI_LAUNCH_WEAPON_LABEL", "C": "UI_LAUNCH_CHARACTER_LABEL", "L": "UI_FINISH_VITALS", "F": "HUB_FUNCTION_FORGE", "P": "UI_FINISH_EXPLORATION"}
+const BRANCH_ART := {"W": ["weapons", "sword"], "C": ["time_abilities", "stop"], "L": ["items", "rewind_salve"], "F": ["weapons", "gauntlets"], "P": ["time_abilities", "rift"]}
 
 var _selectors: Dictionary = {}
 var _build_name: LineEdit
@@ -57,33 +61,96 @@ func _render_state() -> void:
 		"archive", "gallery", "mirror":
 			_render_collection(str(_state.function_id))
 		"training":
-			_add_action("tutorial", tr("UI_TUTORIAL_TITLE"), "", true, "", func(): tutorial_requested.emit())
+			var lesson := Page.section(rows_container, tr("UI_TUTORIAL_TITLE"), Art.icon(&"mode_art", &"training"))
+			lesson.name = "TrainingLesson"
+			Page.relocate_row(_add_action("tutorial", tr("UI_TUTORIAL_TITLE"), "", true, "", func(): tutorial_requested.emit()), lesson)
 		"merchant":
 			_render_providers()
 	_render_dialogue()
 
 
 func _render_nodes() -> void:
+	var branches := Page.grid("CouncilBranches")
+	rows_container.add_child(branches)
+	var sections := {}
+	var names := {}
 	for row: Dictionary in _state.nodes:
+		names[row.id] = tr(str(row.name_key))
+	for row: Dictionary in _state.nodes:
+		var branch := str(row.branch)
+		if not sections.has(branch):
+			var identity: Array = BRANCH_ART[branch]
+			sections[branch] = Page.section(branches, tr(BRANCH_LABELS[branch]), Art.icon(StringName(identity[0]), StringName(identity[1])))
 		var description := tr(str(row.description_key))
 		if not row.prerequisites.is_empty():
-			description += "\n" + ", ".join(row.prerequisites)
-		_add_action(str(row.id), "%s  %s" % [tr(str(row.name_key)), _cost(row.cost)], description, bool(row.available), str(row.reason_key), _emit_operation.bind("meta_unlock", {"node_id": row.id}))
+			var prerequisites := PackedStringArray()
+			for prerequisite: String in row.prerequisites:
+				prerequisites.append(str(names.get(prerequisite, prerequisite)))
+			description += "\n" + tr("UI_FINISH_REQUIRES_FMT") % ", ".join(prerequisites)
+		var state_label := tr("UI_FINISH_UNLOCKED") if row.owned else _cost(row.cost)
+		var action := _add_action(str(row.id), "%s  %s" % [tr(str(row.name_key)), state_label], description, bool(row.available), str(row.reason_key), _emit_operation.bind("meta_unlock", {"node_id": row.id}))
+		Page.relocate_row(action, sections[branch])
+		if row.owned:
+			action.add_theme_color_override("font_disabled_color", Color("79baa1"))
 
 
 func _render_loadout() -> void:
 	var selected: Dictionary = _state.loadout.selected
-	_add_selector("character_id", tr("UI_LAUNCH_CHARACTER_LABEL"), _state.loadout.characters, str(selected.character_id))
-	_add_selector("weapon_id", tr("UI_LAUNCH_WEAPON_LABEL"), _state.loadout.weapons, str(selected.weapon_id))
+	var loadout := VBoxContainer.new()
+	loadout.name = "GatewayLoadout"
+	loadout.add_theme_constant_override("separation", 8)
+	rows_container.add_child(loadout)
+	var roster := Page.grid("CharacterRoster", 5)
+	loadout.add_child(roster)
+	for index: int in range(_state.loadout.characters.size()):
+		var row: Dictionary = _state.loadout.characters[index]
+		var character := VBoxContainer.new()
+		character.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		character.add_theme_constant_override("separation", 2)
+		roster.add_child(character)
+		var portrait := Art.image(Art.actor(str(row.id)), 48, "CharacterPortrait")
+		portrait.set_meta("actor_id", row.id)
+		portrait.modulate = Color.WHITE if row.available else Color(0.35, 0.39, 0.36)
+		character.add_child(portrait)
+		var choose := Button.new()
+		choose.text = tr(str(row.name_key))
+		choose.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		choose.add_theme_font_size_override("font_size", 11)
+		choose.custom_minimum_size = Vector2(0, 28)
+		choose.disabled = not row.available or not _state.launch_available
+		choose.tooltip_text = tr(str(row.reason_key)) if not row.available else ""
+		choose.set_meta("action_id", "select_character:" + str(row.id))
+		choose.set_meta("available", not choose.disabled)
+		choose.pressed.connect(_choose_character.bind(index, _epoch))
+		character.add_child(choose)
+		_actions.append(choose)
+		if row.id == selected.character_id:
+			choose.add_theme_color_override("font_color", Color("e5bd69"))
+	var preparation := HBoxContainer.new()
+	preparation.add_theme_constant_override("separation", 16)
+	loadout.add_child(preparation)
+	preparation.add_child(Art.image(Art.actor(str(selected.character_id)), 96, "SelectedCharacterPreview"))
+	var selectors := VBoxContainer.new()
+	selectors.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	selectors.add_theme_constant_override("separation", 4)
+	preparation.add_child(selectors)
+	_add_selector("character_id", tr("UI_LAUNCH_CHARACTER_LABEL"), _state.loadout.characters, str(selected.character_id), selectors)
+	_add_selector("weapon_id", tr("UI_LAUNCH_WEAPON_LABEL"), _state.loadout.weapons, str(selected.weapon_id), selectors)
 	var selected_pair := ""
 	for row: Dictionary in _state.loadout.time_pairs:
 		if row.ability_ids == selected.enabled_time_skills:
 			selected_pair = str(row.id)
-	_add_selector("time_pair", tr("UI_LAUNCH_TIME_PAIR_LABEL"), _state.loadout.time_pairs, selected_pair)
-	_add_action("boss_rush", tr("UI_MODE_BOSS_RUSH"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): boss_rush_requested.emit(_state.loadout.selected.duplicate(true)))
-	_add_action("endless", tr("UI_MODE_ENDLESS"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): endless_requested.emit(_state.loadout.selected.duplicate(true)))
-	_add_action("daily_boss", tr("UI_DAILY_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): daily_boss_requested.emit())
-	_add_action("authored_challenges", tr("UI_AUTHORED_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): authored_challenges_requested.emit())
+	_add_selector("time_pair", tr("UI_LAUNCH_TIME_PAIR_LABEL"), _state.loadout.time_pairs, selected_pair, selectors)
+	_add_kit_strip(loadout, selected.character_id, selected.weapon_id, selected.enabled_time_skills, false)
+	var modes := Page.grid("ExpeditionModes")
+	loadout.add_child(modes)
+	var boss_rush := _add_action("boss_rush", tr("UI_MODE_BOSS_RUSH"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): boss_rush_requested.emit(_state.loadout.selected.duplicate(true)))
+	var endless := _add_action("endless", tr("UI_MODE_ENDLESS"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): endless_requested.emit(_state.loadout.selected.duplicate(true)))
+	var daily := _add_action("daily_boss", tr("UI_DAILY_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): daily_boss_requested.emit())
+	var authored := _add_action("authored_challenges", tr("UI_AUTHORED_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): authored_challenges_requested.emit())
+	for action: Button in [boss_rush, endless, daily, authored]:
+		Art.button_icon(action, Art.icon(&"mode_art", StringName(action.get_meta("action_id"))))
+		Page.relocate_row(action, modes)
 	var launch := Button.new()
 	launch.name = "LaunchButton"
 	launch.text = tr("UI_HUB_ENTER")
@@ -113,8 +180,10 @@ func _render_loadout() -> void:
 		_actions.append(resume)
 
 
-func _add_selector(field: String, label: String, rows: Array, selected_id: String) -> void:
-	_add_text(label, field + "Label")
+func _add_selector(field: String, label: String, rows: Array, selected_id: String, destination: VBoxContainer) -> void:
+	var heading := Page.label(label, 11)
+	heading.name = field + "Label"
+	destination.add_child(heading)
 	var option := OptionButton.new()
 	option.name = field
 	option.custom_minimum_size = Vector2(0, 29)
@@ -130,11 +199,35 @@ func _add_selector(field: String, label: String, rows: Array, selected_id: Strin
 		option.set_item_disabled(index, not bool(row.get("available", true)))
 		if row.id == selected_id:
 			option.select(index)
-	rows_container.add_child(option)
+	destination.add_child(option)
 	_selectors[field] = option
 	option.disabled = not bool(_state.launch_available)
 	option.item_selected.connect(_selection_changed.bind(_epoch))
 	option.gui_input.connect(_selector_input.bind(option, _epoch))
+
+
+func _choose_character(index: int, source_epoch: int) -> void:
+	if source_epoch != _epoch or _submitted or not visible or not _selectors.has("character_id"):
+		return
+	var option: OptionButton = _selectors.character_id
+	if index < 0 or index >= option.item_count or option.disabled or option.is_item_disabled(index):
+		return
+	option.select(index)
+	_selection_changed(index, source_epoch)
+
+
+func _add_kit_strip(parent: Control, character_id: String, weapon_id: String, abilities: Array, include_character: bool = true) -> void:
+	var strip := HBoxContainer.new()
+	strip.name = "EquippedKit"
+	strip.add_theme_constant_override("separation", 8)
+	parent.add_child(strip)
+	if include_character:
+		strip.add_child(Art.image(Art.actor(character_id), 48))
+	strip.add_child(Art.image(Art.icon(&"weapons", StringName(weapon_id)), 32, "EquippedWeapon"))
+	for ability: String in abilities:
+		strip.add_child(Art.image(Art.icon(&"time_abilities", StringName(ability)), 32, "EquippedTimeSlot"))
+	var caption := Page.label(tr("WEAPON_%s_NAME" % weapon_id.to_upper()) + " / " + tr("UI_TIME_PAIR_FMT") % [tr("TIME_ABILITY_%s_NAME" % str(abilities[0]).to_upper()), tr("TIME_ABILITY_%s_NAME" % str(abilities[1]).to_upper())], 11)
+	strip.add_child(caption)
 
 
 func _selection_changed(_index: int, source_epoch: int) -> void:
@@ -160,10 +253,22 @@ func _selector_input(event: InputEvent, option: OptionButton, source_epoch: int)
 
 
 func _render_forge() -> void:
+	var weapons := Page.grid("ForgeWeapons")
+	rows_container.add_child(weapons)
 	for row: Dictionary in _state.forge.weapons:
-		_add_text("%s  +%d  (%d%%)" % [tr(str(row.name_key)), int(row.level), roundi(float(row.attack_bonus) * 100)], "Weapon")
+		var weapon := Page.section(weapons, tr(str(row.name_key)), Art.icon(&"weapons", StringName(row.id)), "+%d  /  +%d%%" % [int(row.level), roundi(float(row.attack_bonus) * 100)])
+		var pips := HBoxContainer.new()
+		pips.name = "UpgradePips"
+		pips.add_theme_constant_override("separation", 4)
+		weapon.add_child(pips)
+		for level: int in range(5):
+			var pip := ColorRect.new()
+			pip.custom_minimum_size = Vector2(20, 4)
+			pip.color = Color("e5bd69") if level < int(row.level) else Color("697771")
+			pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			pips.add_child(pip)
 		var upgrade: Dictionary = row.upgrade
-		_add_action("upgrade:" + str(row.id), "%s  %s" % [tr("UI_HUB_UPGRADE"), _cost(upgrade.cost)], "", bool(upgrade.available), str(upgrade.reason_key), _emit_operation.bind("forge_upgrade", {"weapon_id": row.id}))
+		Page.relocate_row(_add_action("upgrade:" + str(row.id), "%s  %s" % [tr("UI_HUB_UPGRADE"), _cost(upgrade.cost)], "", bool(upgrade.available), str(upgrade.reason_key), _emit_operation.bind("forge_upgrade", {"weapon_id": row.id})), weapon)
 		for enchantment: Dictionary in row.enchantments:
 			var preference: Array = row.enchant_preferences.duplicate()
 			if bool(enchantment.selected):
@@ -171,20 +276,27 @@ func _render_forge() -> void:
 			else:
 				preference.append(enchantment.id)
 			_add_preference("enchant:" + str(row.id) + ":" + str(enchantment.id), "%s  %s" % [tr(str(enchantment.name_key)), _cost(enchantment.cost)], enchantment, _emit_operation.bind("enchant_preference", {"weapon_id": row.id, "enchantment_ids": preference}))
+			rows_container.get_child(-1).reparent(weapon, false)
 		for payment: Dictionary in row.temper_options:
-			_add_action("temper:" + str(row.id) + ":" + str(payment.currency), "%s  %s" % [tr("UI_HUB_VOID_TEMPER"), _cost(payment.cost)], "", bool(payment.available), str(payment.reason_key), _emit_operation.bind("void_temper", {"weapon_id": row.id, "payment_currency": payment.currency}))
+			Page.relocate_row(_add_action("temper:" + str(row.id) + ":" + str(payment.currency), "%s  %s" % [tr("UI_HUB_VOID_TEMPER"), _cost(payment.cost)], "", bool(payment.available), str(payment.reason_key), _emit_operation.bind("void_temper", {"weapon_id": row.id, "payment_currency": payment.currency})), weapon)
 
 
 func _render_builds() -> void:
+	var saved_builds := VBoxContainer.new()
+	saved_builds.name = "SavedBuilds"
+	saved_builds.add_theme_constant_override("separation", 8)
+	rows_container.add_child(saved_builds)
+	var selected: Dictionary = _state.loadout.selected
+	_add_kit_strip(saved_builds, selected.character_id, selected.weapon_id, selected.enabled_time_skills)
 	_build_name = LineEdit.new()
 	_build_name.name = "BuildName"
 	_build_name.placeholder_text = tr("UI_HUB_BUILD_NAME")
 	_build_name.max_length = 64
 	_build_name.text = _name_draft
 	_build_name.custom_minimum_size = Vector2(0, 29)
-	rows_container.add_child(_build_name)
+	saved_builds.add_child(_build_name)
 	_build_name.text_changed.connect(func(value: String): _name_draft = value)
-	_add_action("build_save", tr("UI_HUB_BUILD_SAVE"), "", bool(_state.loadout.build_save.available), str(_state.loadout.build_save.reason_key), _save_build)
+	Page.relocate_row(_add_action("build_save", tr("UI_HUB_BUILD_SAVE"), "", bool(_state.loadout.build_save.available), str(_state.loadout.build_save.reason_key), _save_build), saved_builds)
 	_share_code = LineEdit.new()
 	_share_code.name = "ShareCode"
 	_share_code.placeholder_text = tr("UI_SHARE_CODE")
@@ -192,17 +304,23 @@ func _render_builds() -> void:
 	_share_code.custom_minimum_size = Vector2(0, 29)
 	_share_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_share_code.text = _share_draft
-	rows_container.add_child(_share_code)
+	saved_builds.add_child(_share_code)
 	_share_code.text_changed.connect(func(value: String): _share_draft = value)
-	_add_action("build_import", tr("UI_SHARE_IMPORT"), "", true, "", _import_share)
+	var sharing := Page.grid("SharingTools")
+	saved_builds.add_child(sharing)
+	Page.relocate_row(_add_action("build_import", tr("UI_SHARE_IMPORT"), "", true, "", _import_share), sharing)
 	var clipboard := DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD)
 	var reason := "" if clipboard else "UI_SHARE_CLIPBOARD_UNAVAILABLE"
-	_add_action("share_copy", tr("UI_SHARE_COPY"), "", clipboard, reason, _copy_share)
-	_add_action("share_paste", tr("UI_SHARE_PASTE"), "", clipboard, reason, _paste_share)
+	Page.relocate_row(_add_action("share_copy", tr("UI_SHARE_COPY"), "", clipboard, reason, _copy_share), sharing)
+	Page.relocate_row(_add_action("share_paste", tr("UI_SHARE_PASTE"), "", clipboard, reason, _paste_share), sharing)
 	for row: Dictionary in _state.builds:
-		_add_action("build_select:" + str(row.id), str(row.name), "%s / %s" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper())], bool(row.available), str(row.reason_key), _emit_operation.bind("build_select", {"build_id": row.id}))
-		_add_action("build_export:" + str(row.id), tr("UI_SHARE_EXPORT"), "", bool(row.available), str(row.reason_key), _emit_operation.bind("build_export", {"build_id": row.id}))
-		_add_action("build_remove:" + str(row.id), tr("UI_HUB_BUILD_REMOVE"), "", bool(row.remove.available), str(row.remove.reason_key), _emit_operation.bind("build_remove", {"build_id": row.id}))
+		var build := Page.section(saved_builds, str(row.name), Art.actor(str(row.character_id)))
+		_add_kit_strip(build, row.character_id, row.weapon_id, row.time_abilities, false)
+		Page.relocate_row(_add_action("build_select:" + str(row.id), str(row.name), "%s / %s" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper())], bool(row.available), str(row.reason_key), _emit_operation.bind("build_select", {"build_id": row.id})), build)
+		var tools := Page.grid("BuildTools")
+		build.add_child(tools)
+		Page.relocate_row(_add_action("build_export:" + str(row.id), tr("UI_SHARE_EXPORT"), "", bool(row.available), str(row.reason_key), _emit_operation.bind("build_export", {"build_id": row.id})), tools)
+		Page.relocate_row(_add_action("build_remove:" + str(row.id), tr("UI_HUB_BUILD_REMOVE"), "", bool(row.remove.available), str(row.remove.reason_key), _emit_operation.bind("build_remove", {"build_id": row.id})), tools)
 
 
 func show_share_code(code: String) -> void:
@@ -282,33 +400,62 @@ func _render_collection(kind: String) -> void:
 		_add_action("replay_library", tr("UI_REPLAY_LIBRARY"), "", true, "", func(): replay_library_requested.emit())
 	if kind == "gallery":
 		_add_action("challenge_rewards", tr("UI_CHALLENGE_REWARDS"), "", true, "", func(): challenge_rewards_requested.emit())
+	var header_art := Art.icon(&"items", &"chronal_battery") if kind == "gallery" else Art.icon(&"time_abilities", &"rewind" if kind == "archive" else &"rift")
+	var collection := Page.section(rows_container, title_label.text, header_art)
+	var grid := Page.grid("CollectionGrid", 3)
+	collection.add_child(grid)
+	var rows: Array = _state.collections[kind]
+	if rows.is_empty():
+		collection.add_child(Page.label(tr("UI_HUB_EMPTY")))
+	for row: Dictionary in rows:
+		var tile := VBoxContainer.new()
+		tile.name = "Collection_" + str(row.id)
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tile.add_theme_constant_override("separation", 4)
+		grid.add_child(tile)
+		var texture := Art.icon(&"items", StringName(row.id)) if kind == "gallery" else header_art
+		var image := Art.image(texture, 32)
+		image.modulate = Color.WHITE if row.owned else Color(0.28, 0.34, 0.30)
+		tile.add_child(image)
+		tile.add_child(Page.label(tr(str(row.name_key))))
+		var ownership := Page.label(tr("UI_HUB_OWNED" if row.owned else "UI_HUB_LOCKED"), 11)
+		ownership.add_theme_color_override("font_color", Color("79baa1") if row.owned else Color("abb8ac"))
+		tile.add_child(ownership)
+	if kind == "gallery":
 		var cosmetics := CosmeticsPanel.new()
 		rows_container.add_child(cosmetics)
 		if cosmetics.configure(_state.cosmetics, _emit_operation, _activate_action, _epoch):
 			_actions.append_array(cosmetics.action_buttons())
 		else:
 			cosmetics.queue_free()
-	var rows: Array = _state.collections[kind]
-	if rows.is_empty():
-		_add_text(tr("UI_HUB_EMPTY"))
-	for row: Dictionary in rows:
-		_add_text("%s  %s" % [tr(str(row.name_key)), tr("UI_HUB_OWNED" if row.owned else "UI_HUB_LOCKED")])
 	if kind == "mirror":
 		_add_action("platform", tr("UI_PLATFORM_TITLE"), "", true, "", func(): platform_requested.emit())
 		_render_providers()
 
 
 func _render_providers() -> void:
+	var providers := Page.section(rows_container, tr("UI_PLATFORM_TITLE"), Art.icon(&"mode_art", &"daily_boss"))
+	providers.name = "ProviderRecords"
 	for row: Dictionary in _state.providers:
 		_add_text(tr("UI_COMMUNITY_LOCAL_RECORDS" if row.id == "leaderboard" and row.available else "UI_HUB_PROVIDER_" + str(row.id).to_upper()))
-		_add_action("provider_refresh:" + str(row.id), tr("UI_COMMUNITY_REFRESH"), "", true, "", _emit_operation.bind("provider_refresh", {"provider_id": row.id}))
+		var refresh := _add_action("provider_refresh:" + str(row.id), tr("UI_COMMUNITY_REFRESH"), "", true, "", _emit_operation.bind("provider_refresh", {"provider_id": row.id}))
+		Art.button_icon(refresh, Art.icon(&"time_abilities", &"rewind"))
 		if not row.available:
 			_add_text(tr(str(row.reason_key)))
 		elif row.entries.is_empty():
 			_add_text(tr("UI_COMMUNITY_EMPTY"))
 		for entry: Dictionary in row.entries:
-			_add_text("%s  %d" % [str(entry.name), int(entry.score)])
-			rows_container.get_child(-1).set_meta("provider_record", row.id)
+			var record := HBoxContainer.new()
+			record.set_meta("provider_record", row.id)
+			record.add_theme_constant_override("separation", 12)
+			rows_container.add_child(record)
+			record.add_child(Page.label(str(entry.name)))
+			var score := Page.label(str(int(entry.score)))
+			score.theme_type_variation = &"CounterLabel"
+			score.custom_minimum_size = Vector2(72, 0)
+			score.size_flags_horizontal = Control.SIZE_SHRINK_END
+			score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			record.add_child(score)
 
 
 func focus_provider_result(id: String) -> void:
@@ -360,6 +507,11 @@ func _cost(value: Dictionary) -> String:
 func _focus_controls() -> Array[Control]:
 	var controls: Array[Control] = []
 	var actions := super._focus_controls()
+	if _state.get("function_id") == "gateway":
+		for action: Control in actions.duplicate():
+			if str(action.get_meta("action_id", "")).begins_with("select_character:"):
+				controls.append(action)
+				actions.erase(action)
 	for option: OptionButton in _selectors.values():
 		if not option.disabled:
 			controls.append(option)
