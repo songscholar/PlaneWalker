@@ -28,6 +28,7 @@ func _ready() -> void:
 	var rows: Array[Dictionary] = []
 	suite.assert_true(restored._load_resume(partial, 0, 2, 1, rows), "fresh runner loads exactly one committed typed receipt")
 	suite.assert_equal(rows, [row], "native integer and packed-array types survive fresh recovery")
+	suite.assert_equal(var_to_bytes(rows[0]), var_to_bytes(row), "fresh recovery preserves exact typed row bytes")
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(partial))
 	var receipt_path := directory.path_join("cases/case-000000.json")
 	var receipt: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(receipt_path))

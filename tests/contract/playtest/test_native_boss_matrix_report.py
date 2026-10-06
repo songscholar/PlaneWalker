@@ -100,7 +100,15 @@ class NativeBossMatrixReportTest(unittest.TestCase):
             path.write_text("extends RefCounted\n", encoding="utf-8")
             sources = {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()}
             source = matrix.source_identity(sources)
-            self.assertTrue(matrix.validate_committed_source(sources, source["revision"]))
+            errors = matrix.validate_committed_source(sources, source["revision"])
+            self.assertIn(f"native certification source is outside the selected commit scope: {next(iter(sources))}", errors)
+
+    def test_committed_source_scope_rejects_missing_runtime_files(self) -> None:
+        sources = matrix.source_snapshot()
+        removed = next(path for path in sources if path.startswith("scripts/"))
+        source = matrix.source_identity(sources)
+        errors = matrix.validate_committed_source({key: value for key, value in sources.items() if key != removed}, source["revision"])
+        self.assertIn(f"native certification source is missing from the working tree: {removed}", errors)
 
     def test_cli_refuses_dirty_source_before_launch_or_evidence_writes(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
@@ -115,7 +123,7 @@ class NativeBossMatrixReportTest(unittest.TestCase):
                 with self.assertRaises(SystemExit) as rejected:
                     matrix.main(["--output", str(output), "--logs", str(logs), "--jobs", "1", "--count", "1"])
             self.assertEqual(rejected.exception.code, 2)
-            self.assertIn("native certification source differs from commit", stderr.getvalue())
+            self.assertIn("native certification source is missing from the working tree", stderr.getvalue())
             launch.assert_not_called()
             write.assert_not_called()
             self.assertFalse(output.exists())
@@ -127,7 +135,8 @@ class NativeBossMatrixReportTest(unittest.TestCase):
             root = Path(directory)
             attempt = root / "attempts/000"
             attempt.mkdir(parents=True)
-            matrix._write_json_atomic(attempt / "execution.json", {"source": source, "status": "running"})
+            execution = {"source": source, "status": "running", "range_start": 0, "requested_case_count": 2}
+            matrix._write_json_atomic(attempt / "execution.json", execution)
             (attempt / "godot.log").write_text("clean engine\n", encoding="utf-8")
             self.assertTrue(matrix._validate_attempt_logs(root, source))
             (attempt / "stdout.log").write_text("clean stdout\n", encoding="utf-8")
@@ -135,6 +144,69 @@ class NativeBossMatrixReportTest(unittest.TestCase):
             (attempt / "stdout.log").write_text("ERROR: hidden error\n", encoding="utf-8")
             self.assertTrue(matrix._validate_attempt_logs(root, source))
             self.assertTrue(matrix._validate_attempt_logs(root, {**source, "revision": "c" * 40}))
+
+    def test_finished_attempt_requires_zero_exit_and_requested_range(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            attempt = root / "attempts/000"
+            attempt.mkdir(parents=True)
+            execution = {"source": source, "status": "finished", "exit_code": 1, "range_start": 5, "requested_case_count": 1}
+            matrix._write_json_atomic(attempt / "execution.json", execution)
+            (attempt / "stdout.log").write_text("clean stdout\n", encoding="utf-8")
+            (attempt / "godot.log").write_text("clean engine\n", encoding="utf-8")
+            self.assertTrue(matrix._validate_attempt_logs(root, source, 0, 2))
+            execution.update(exit_code=0, range_start=0, requested_case_count=2)
+            matrix._write_json_atomic(attempt / "execution.json", execution)
+            self.assertEqual(matrix._validate_attempt_logs(root, source, 0, 2), [])
+            for changes in ({"exit_code": False}, {"range_start": False}, {"status": "running", "exit_code": 0}, {"status": "timed_out", "exit_code": 0}):
+                matrix._write_json_atomic(attempt / "execution.json", {**execution, **changes})
+                with self.subTest(changes=changes):
+                    self.assertTrue(matrix._validate_attempt_logs(root, source, 0, 2))
+
+    def test_attempt_directory_symlink_is_rejected_before_process_launch(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            shard = root / "native-000-001"
+            shard.mkdir()
+            target = root / "redirected-attempts"
+            target.mkdir()
+            (shard / "attempts").symlink_to(target, target_is_directory=True)
+            with patch.object(matrix.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+                result = matrix.run_shard("unused-godot", 0, 1, root, 10, expected_source={"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False})
+            self.assertEqual(run.call_count, 0, "redirected attempt directory cannot launch a process")
+            self.assertTrue(any("symlink" in error for error in result["errors"]))
+            self.assertEqual(list(target.iterdir()), [])
+
+    def test_retained_log_symlink_is_rejected_before_process_launch_and_validation(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            shard = root / "native-000-001"
+            attempt = shard / "attempts/000"
+            attempt.mkdir(parents=True)
+            target = root / "retained.log"
+            target.write_text("retained", encoding="utf-8")
+            (attempt / "stdout.log").symlink_to(target)
+            self.assertTrue(matrix._validate_attempt_logs(shard, source, 0, 1))
+            with patch.object(matrix.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+                result = matrix.run_shard("unused-godot", 0, 1, root, 10, expected_source=source)
+            self.assertEqual(run.call_count, 0, "redirected retained log cannot launch a process")
+            self.assertTrue(any("symlink" in error for error in result["errors"]))
+            self.assertEqual(target.read_text(encoding="utf-8"), "retained")
+
+    def test_atomic_json_write_refuses_file_and_temporary_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            target = root / "retained.json"
+            target.write_text("retained", encoding="utf-8")
+            for name in ("execution.json", "execution.json.tmp"):
+                path = root / name
+                path.symlink_to(target)
+                with self.assertRaisesRegex(ValueError, "symlink"):
+                    matrix._write_json_atomic(root / "execution.json", {})
+                path.unlink()
+            self.assertEqual(target.read_text(encoding="utf-8"), "retained")
 
     def test_timeout_keeps_incomplete_case_data_and_error_semantics(self) -> None:
         source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}

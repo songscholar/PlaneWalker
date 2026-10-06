@@ -30,6 +30,13 @@ CASE_COUNT = 750
 REPORT_VERSION = 3
 TRACE_FIELDS = {"run_id", "target_id", "raw_run_id", "raw_target_id", "native_authenticated", "source_id", "frame", "phase_index", "hit_index", "amount", "actual_loss", "attack_generation", "damage_type", "accelerated", "tags"}
 ERROR = re.compile(r"SCRIPT ERROR|Parse Error|(?:^|\n)ERROR:|ObjectDB instances leaked|RID.*leaked|Orphan (?:Node|StringName)", re.I)
+SOURCE_EXPLICIT_PATHS = {
+    "tools/run_p15_hostile_matrix.py",
+    "tools/runtime_log_validation.py",
+    "tests/smoke/p15_hostile_loadout_matrix_test.gd",
+    "tests/smoke/p15_hostile_loadout_matrix_test.tscn",
+    "project.godot",
+}
 
 
 def positive_number(value: object) -> bool:
@@ -46,6 +53,16 @@ def source_snapshot() -> dict[str, str]:
     paths.extend(path for path in (ROOT / "data/content_packs/base").rglob("*") if path.is_file() and not path.name.endswith((".uid", ".import", ".translation")))
     paths.extend((ROOT / "tools/run_p15_hostile_matrix.py", ROOT / "tools/runtime_log_validation.py", ROOT / "tests/smoke/p15_hostile_loadout_matrix_test.gd", ROOT / "tests/smoke/p15_hostile_loadout_matrix_test.tscn", ROOT / "project.godot"))
     return {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)}
+
+
+def _in_source_scope(path: str) -> bool:
+    if path in SOURCE_EXPLICIT_PATHS:
+        return True
+    if (path.startswith("scripts/") or path.startswith("autoload/") or path.startswith("tests/support/")) and path.endswith(".gd"):
+        return True
+    if path.startswith("scenes/") and path.endswith(".tscn"):
+        return True
+    return path.startswith("data/content_packs/base/") and not path.endswith((".uid", ".import", ".translation"))
 
 
 def source_identity(sources: dict[str, str], revision_override: str | None = None) -> dict[str, object]:
@@ -70,15 +87,26 @@ def validate_committed_source(sources: dict[str, str], revision: str) -> list[st
     if tree.returncode:
         return ["native certification source commit is unavailable"]
     blobs = {}
+    committed_scope = set()
     for entry in tree.stdout.split(b"\0"):
         if not entry:
             continue
         metadata, name = entry.split(b"\t", 1)
         mode, kind, digest = metadata.split(b" ", 2)
         if kind == b"blob" and mode != b"120000":
-            blobs[name.decode()] = digest.decode()
+            path = name.decode()
+            blobs[path] = digest.decode()
+            if _in_source_scope(path):
+                committed_scope.add(path)
     errors = []
+    source_scope = set(sources)
+    for path in sorted(committed_scope - source_scope):
+        errors.append(f"native certification source is missing from the working tree: {path}")
+    for path in sorted(source_scope - committed_scope):
+        errors.append(f"native certification source is outside the selected commit scope: {path}")
     for path in sources:
+        if path not in blobs:
+            continue
         payload = (ROOT / path).read_bytes()
         actual = hashlib.sha1(b"blob " + str(len(payload)).encode() + b"\0" + payload).hexdigest()
         if blobs.get(path) != actual:
@@ -265,7 +293,19 @@ def _read_json(path: Path) -> dict[str, object] | None:
     return value if isinstance(value, dict) else None
 
 
+def _path_has_symlink(path: Path) -> bool:
+    current = path.absolute()
+    while True:
+        if current.is_symlink():
+            return True
+        if current == ROOT or current.parent == current:
+            return False
+        current = current.parent
+
+
 def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
+    if _path_has_symlink(path) or _path_has_symlink(path.with_suffix(path.suffix + ".tmp")):
+        raise ValueError("native evidence write must not redirect through a symlink")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as destination:
@@ -275,16 +315,40 @@ def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
     temporary.replace(path)
 
 
-def _validate_attempt_logs(directory: Path, expected_source: dict[str, object]) -> list[str]:
+def _validate_attempt_logs(
+    directory: Path,
+    expected_source: dict[str, object],
+    expected_start: int | None = None,
+    expected_count: int | None = None,
+) -> list[str]:
     errors = []
+    if _path_has_symlink(directory / "attempts"):
+        return ["native attempt evidence path must not redirect through a symlink"]
     attempts = sorted(path for path in (directory / "attempts").glob("*") if path.is_dir())
     if (directory / "godot.log").exists() or (directory / "stdout.log").exists():
         attempts.append(directory)
     if not attempts:
         errors.append("native resume has no retained execution logs")
     for attempt in attempts:
+        if _path_has_symlink(attempt) or any(_path_has_symlink(attempt / name) for name in ("execution.json", "stdout.log", "godot.log")):
+            errors.append("native attempt evidence path must not redirect through a symlink")
+            continue
         execution = _read_json(attempt / "execution.json")
-        if not execution or execution.get("source") != expected_source or execution.get("status") not in ("running", "finished", "timed_out"):
+        status = execution.get("status") if execution else None
+        valid_status = status in ("running", "finished", "timed_out")
+        valid_range = (
+            bounded_integer(execution.get("range_start"), 0, CASE_COUNT - 1)
+            and bounded_integer(execution.get("requested_case_count"), 1, CASE_COUNT)
+            and execution["range_start"] + execution["requested_case_count"] <= CASE_COUNT
+            and (expected_start is None or execution["range_start"] == expected_start)
+            and (expected_count is None or execution["requested_case_count"] == expected_count)
+        ) if execution else False
+        valid_exit = (
+            status == "running" and "exit_code" not in execution
+            or status == "timed_out" and type(execution.get("exit_code")) is int and execution["exit_code"] == 124
+            or status == "finished" and type(execution.get("exit_code")) is int and execution["exit_code"] == 0
+        ) if execution else False
+        if not execution or execution.get("source") != expected_source or not valid_status or not valid_range or not valid_exit:
             errors.append("native attempt execution source identity is missing or substituted")
         try:
             validate_logs([attempt / "stdout.log", attempt / "godot.log"])
@@ -372,6 +436,15 @@ def run_shard(
     resume: bool = False,
 ) -> dict[str, object]:
     directory = logs / f"native-{start:03d}-{count:03d}"
+    if _path_has_symlink(logs) or _path_has_symlink(directory):
+        return {
+            "range_start": start,
+            "requested_case_count": count,
+            "duration_seconds": 0.0,
+            "logs": str(directory.relative_to(ROOT)),
+            "errors": ["native shard evidence path must not redirect through a symlink"],
+            "report": {},
+        }
     directory.mkdir(parents=True, exist_ok=True)
     report_path = directory / "report.json"
     partial_path = directory / "partial.json"
@@ -397,7 +470,7 @@ def run_shard(
     elif partial_path.exists() or report_path.exists():
         resume_errors.append("native shard output already exists; use --resume to avoid mixing prior evidence")
     if resume:
-        resume_errors.extend(_validate_attempt_logs(directory, expected_source))
+        resume_errors.extend(_validate_attempt_logs(directory, expected_source, start, count))
     if any(candidate.is_symlink() for candidate in (directory, *directory.parents)):
         resume_errors.append("native shard directory must not redirect its evidence")
     if resume_errors:
@@ -428,11 +501,30 @@ def run_shard(
         "XDG_CACHE_HOME": str(directory / "user-data"),
     })
     attempts = directory / "attempts"
+    retained_attempt_paths = [path for path in attempts.glob("*")]
+    if _path_has_symlink(attempts) or any(_path_has_symlink(path) or any(_path_has_symlink(path / name) for name in ("execution.json", "stdout.log", "godot.log")) for path in retained_attempt_paths):
+        return {
+            "range_start": start,
+            "requested_case_count": count,
+            "duration_seconds": 0.0,
+            "logs": str(directory.relative_to(ROOT)),
+            "errors": ["native attempt evidence path must not redirect through a symlink"],
+            "report": {},
+        }
     attempts.mkdir(exist_ok=True)
     attempt_number = 0
     while (attempts / f"{attempt_number:03d}").exists():
         attempt_number += 1
     attempt = attempts / f"{attempt_number:03d}"
+    if _path_has_symlink(attempt):
+        return {
+            "range_start": start,
+            "requested_case_count": count,
+            "duration_seconds": 0.0,
+            "logs": str(directory.relative_to(ROOT)),
+            "errors": ["native attempt evidence path must not redirect through a symlink"],
+            "report": {},
+        }
     attempt.mkdir()
     if report_path.exists():
         report_path.replace(attempt / "prior-report.json")
@@ -467,7 +559,7 @@ def run_shard(
     if timed_out:
         errors.insert(0, f"native shard timed out after{timeout}s")
     errors.extend(partial_errors)
-    errors.extend(_validate_attempt_logs(directory, expected_source))
+    errors.extend(_validate_attempt_logs(directory, expected_source, start, count))
     engine_output = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in directory.rglob("*.log"))
     if ERROR.search(output) or ERROR.search(engine_output):
         errors.insert(0, "Godot contains an error, orphan or leak diagnostic")
@@ -508,6 +600,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Godot executable is unavailable")
     output = args.output.resolve()
     logs = args.logs.resolve()
+    if _path_has_symlink(args.output) or _path_has_symlink(args.logs):
+        parser.error("output and evidence logs must not redirect through a symlink")
     if not output.is_relative_to(ROOT) or not logs.is_relative_to(ROOT):
         parser.error("output and evidence logs must remain inside the workspace")
     chunk = (args.count + args.jobs - 1) // args.jobs
@@ -518,6 +612,8 @@ def main(argv: list[str] | None = None) -> int:
     if source_errors:
         parser.error("; ".join(source_errors[:5]))
     manifest_path = logs / "source-manifest.json"
+    if _path_has_symlink(manifest_path):
+        parser.error("source manifest must not redirect through a symlink")
     if args.resume:
         retained_sources = _read_json(manifest_path)
         if retained_sources != {"source": source, "runtime_files_sha256": sources}:

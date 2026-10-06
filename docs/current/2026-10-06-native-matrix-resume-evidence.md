@@ -1,7 +1,7 @@
 # Native Matrix Resume Evidence
 
 - Status: Focused Verified / Full 750-case certification pending
-- Document Role: Source-bound persistence and crash-resume evidence for the native P15 matrix
+- Document Role: Current source-bound persistence and crash-resume evidence for the native P15 matrix
 - Authority Level: Below approved full-product completion contract
 - Applies To: `tools/run_p15_hostile_matrix.py` and `tests/support/p15_native_boss_matrix_runner.gd`
 - Owner: Gameplay performance lane
@@ -37,8 +37,10 @@ parent or receipt symlinks, changed receipt bytes, foreign source/revision,
 changed content snapshot, non-contiguous identities, failed rows, stale logs or
 an unmatched stdout/engine log pair. It resumes only the next canonical index.
 The final aggregate remains failed unless every requested case is present,
-every attempt exits cleanly, and strict paired logs validate. Partial data is
-useful recovery evidence and never a completion claim.
+the completing attempt and every earlier `finished` attempt exit with code 0,
+interrupted or timed-out attempts retain their explicit incomplete state, and
+strict paired logs validate. Partial data is useful recovery evidence and never
+a completion claim.
 
 The Python wrapper records an atomic source manifest before launching a shard.
 It refuses dirty working-tree content that is not byte-identical to the selected
@@ -77,8 +79,9 @@ The retained partial SHA-256 is
 `92f1ccddbf67effa614ecdd517c4ca56657d49bd6566d2cfb5057530b78062d5`.
 
 The two attempts have strict paired logs. Attempt `000` was intentionally
-SIGKILL-terminated and has no normal exit receipt; its unflushed next case is
-not counted. Attempt `001` records `resumed_case_count=1`, `status=finished`,
+SIGKILL-terminated and remains an interrupted `status=running` execution with
+no normal exit receipt; its unflushed next case is not counted. Attempt `001`
+records `resumed_case_count=1`, `status=finished`,
 `exit_code=0`; its final report and all retained attempt logs validate cleanly.
 This bounded run validates the resume mechanism and its failure semantics; it
 does not certify the full matrix.
@@ -107,5 +110,15 @@ paired logs passed, and the aggregate had zero errors. A same-source
 and also had zero errors. The fresh and resumed report hashes are
 `fb20ca8727c444e2f1ede7bf0eb8af27649e57b4862d94541183fd64c8f3c846` and
 `a897a84a45ef8bf9d93a7993a8cbc607f1fd1f326228ecdcb480e2b7ea16cbd0`.
+
+The same frozen checkout also executes a committed-source hard-stop probe at
+`build/native-matrix-hard-stop-committed/`. Its producer process group is killed
+after the first case manifest reports exactly one committed row. Attempt `000`
+therefore remains `running` with no exit code; it cannot claim completion. A
+same-source resume runs only case 1, records `resumed_case_count=1`, finishes with
+exit code zero, and produces exactly indices `[0, 1]` with both final HP values
+zero. Strict paired logs for both attempts pass. The resumed aggregate SHA-256
+is `761a56800f1af78caf32ed6696bc82575af3bd7f72770459354dc34ab8306292`.
+
 This is a clean-commit bounded pilot only; it does not certify the 750-case
 matrix or human playability.
