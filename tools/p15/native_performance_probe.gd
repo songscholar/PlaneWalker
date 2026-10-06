@@ -27,6 +27,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	suite = Suite.new()
+	report.measurement_schema_version = 4
 	report.debug_build = OS.is_debug_build()
 	report.native_process_id = OS.get_process_id()
 	var pid_path := OS.get_environment("PLANEWALKER_PERFORMANCE_PID_FILE")
@@ -41,6 +42,8 @@ func _run() -> void:
 	print("NATIVE_PERFORMANCE_PROCESS_PID ", report.native_process_id)
 	report.requested_frames = _option("FRAMES", 600)
 	report.rendered = OS.get_environment("PLANEWALKER_PERFORMANCE_RENDERED") == "true" and DisplayServer.get_name() != "headless"
+	report["rendering"] = {"requested_method": OS.get_environment("PLANEWALKER_PERFORMANCE_RENDERING_METHOD"), "actual_method": RenderingServer.get_current_rendering_method(), "driver": RenderingServer.get_current_rendering_driver_name(), "adapter_name": RenderingServer.get_video_adapter_name(), "adapter_vendor": RenderingServer.get_video_adapter_vendor(), "api_version": RenderingServer.get_video_adapter_api_version(), "display_server": DisplayServer.get_name()}
+	_check(not report.rendered or report.rendering.requested_method.is_empty() or report.rendering.requested_method == report.rendering.actual_method, "actual native renderer satisfies explicit launcher request")
 	var registry := Registry.new()
 	var loaded: RefCounted = registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
 	_check(not loaded.has_blocking_errors(), "actual authoritative Base content loads")

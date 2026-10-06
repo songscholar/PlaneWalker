@@ -24,6 +24,7 @@ FRAME_METRICS = {"frame_work", "frame_wall"}
 COUNTS = {"actors", "summons", "projectiles", "zones", "constructs", "threats"}
 RSS_SOURCES = {"linux": "proc.status.VmRSS_kib", "darwin": "ps.rss_kib", "win32": "GetProcessMemoryInfo.WorkingSetSize"}
 RSS_SCOPE = "godot_process_after_pid_announcement"
+RENDERING_METHODS = {"forward_plus", "mobile", "gl_compatibility"}
 
 
 def _validate_runtime_logs(stdout_path: Path, engine_path: Path) -> None:
@@ -75,7 +76,7 @@ def validate_report(value):
     if any(type(frames.get(key)) is not int for key in ["first", "last", "unique_count"]) or frames["first"] < 0 or frames["last"] - frames["first"] + 1 != count or frames["unique_count"] != count:
         raise ValueError("measured samples must be unique consecutive actual Player frames")
     measurement_version = value.get("measurement_schema_version", 1)
-    if type(measurement_version) is not int or measurement_version not in (1, 2, 3):
+    if type(measurement_version) is not int or measurement_version not in (1, 2, 3, 4):
         raise ValueError("unsupported native measurement schema")
     metrics = value.get("metrics", {})
     required_metrics = METRICS | FRAME_METRICS if measurement_version >= 2 else METRICS
@@ -117,14 +118,30 @@ def validate_report(value):
     peak_static = value.get("peak_native_static_bytes")
     if type(peak_static) is not int or peak_static < 0 or measurement_version < 3 and peak_static == 0:
         raise ValueError("actual Hub duration and native memory observation are required")
-    if measurement_version == 3:
+    if measurement_version >= 3:
         monitor = value.get("native_static_monitor")
         if type(value.get("debug_build")) is not bool or not isinstance(monitor, dict) or set(monitor) != {"source", "available", "reason"} or monitor["source"] != "Performance.MEMORY_STATIC" or type(monitor["available"]) is not bool:
             raise ValueError("runtime build and static monitor availability must be explicit")
         if monitor["available"] != (peak_static > 0) or monitor["reason"] != ("" if monitor["available"] else "release_build") or not monitor["available"] and value["debug_build"]:
             raise ValueError("only a release zero observation can declare the static monitor unavailable")
         _validate_native_pid_binding(value)
+    if measurement_version >= 4:
+        _validate_rendering(value)
     return value
+
+
+def _validate_rendering(value):
+    rendering = value.get("rendering")
+    fields = {"requested_method", "actual_method", "driver", "adapter_name", "adapter_vendor", "api_version", "display_server"}
+    if not isinstance(rendering, dict) or set(rendering) != fields or any(type(rendering[field]) is not str for field in fields):
+        raise ValueError("v4 requires actual structured native renderer and adapter metadata")
+    if rendering["requested_method"] not in RENDERING_METHODS | {""} or rendering["actual_method"] not in RENDERING_METHODS | {"dummy"}:
+        raise ValueError("native requested and actual rendering methods must be explicit")
+    if value["rendered"]:
+        if rendering["actual_method"] == "dummy" or rendering["display_server"].lower() == "headless" or any(not rendering[field].strip() for field in fields - {"requested_method"}):
+            raise ValueError("rendered measurements require actual hardware and display metadata")
+        if rendering["requested_method"] and rendering["requested_method"] != rendering["actual_method"]:
+            raise ValueError("actual native renderer differs from the explicitly requested backend")
 
 
 def _validate_native_pid_binding(value):
@@ -333,6 +350,7 @@ def main():
     parser.add_argument("--phase", type=int, default=0, choices=[0, 1, 2])
     parser.add_argument("--real-time", action="store_true", help="keep wall-clock pacing; otherwise use Godot fixed-fps scheduling")
     parser.add_argument("--rendered", action="store_true")
+    parser.add_argument("--rendering-method", choices=sorted(RENDERING_METHODS), help="explicit Godot renderer; retained with actual native renderer metadata")
     parser.add_argument("--timeout", type=int, default=28800)
     parser.add_argument("--packaged-binary", type=Path, help="run an exported package whose own main scene is the probe")
     parser.add_argument("--packaged-resource", type=Path, help="authenticate the exported package's PCK alongside its executable")
@@ -369,6 +387,7 @@ def main():
         parser.error("runtime bootstrap PID path must be new and must not be a symlink")
     environment = dict(os.environ)
     environment["PLANEWALKER_PERFORMANCE_PID_FILE"] = str(pid_path)
+    environment["PLANEWALKER_PERFORMANCE_RENDERING_METHOD"] = args.rendering_method or ""
     environment.update({"PLANEWALKER_PERFORMANCE_OUTPUT": str(output), "PLANEWALKER_PERFORMANCE_FRAMES": str(args.frames), "PLANEWALKER_PERFORMANCE_HUB_FRAMES": str(args.hub_frames), "PLANEWALKER_PERFORMANCE_BOSS_FLOOR": str(args.boss_floor), "PLANEWALKER_PERFORMANCE_PHASE": str(args.phase), "PLANEWALKER_PERFORMANCE_WALL_ACCELERATED": str(not args.real_time).lower(), "PLANEWALKER_PERFORMANCE_RENDERED": str(args.rendered).lower(), "PLANEWALKER_TEST_DATA_DIR": str(output.parent / "isolated-files"), "PLANEWALKER_USER_DATA_DIR": str(output.parent / "isolated-files"), "XDG_DATA_HOME": str(output.parent / "isolated-data")})
     for key in ["PLANEWALKER_COVERAGE_HITS_DIR", "PLANEWALKER_COVERAGE_MANIFEST_SHA256", "GDSCRIPT_COVERAGE_PROVIDER_REPORT"]:
         environment.pop(key, None)
@@ -378,6 +397,8 @@ def main():
     if resource is None:
         command.extend(["--path", str(ROOT)])
     command.extend(["--log-file", str(engine_path)])
+    if args.rendering_method is not None:
+        command.extend(["--rendering-method", args.rendering_method])
     if not args.real_time:
         command.extend(["--fixed-fps", "60"])
     if not args.rendered:
@@ -386,7 +407,7 @@ def main():
         command.append("res://tools/p15/native_performance_probe.tscn")
     sources = _runtime_sources()
     source_identity = _source_identity(sources)
-    source_identity.update(runtime_kind="packaged_binary" if resource is not None else "source_project", source_checkout_role="harness_only" if resource is not None else "executed_project", godot_binary=str(binary), godot_binary_sha256=_file_sha256(binary), command=command)
+    source_identity.update(runtime_kind="packaged_binary" if resource is not None else "source_project", source_checkout_role="harness_only" if resource is not None else "executed_project", godot_binary=str(binary), godot_binary_sha256=_file_sha256(binary), requested_rendering_method=args.rendering_method or "", command=command)
     if resource is not None:
         source_identity.update(packaged_resource=str(resource), packaged_resource_sha256=_file_sha256(resource), packaged_resource_binding="macos_bundle_autoload", package_info_plist=str(package_plist), package_info_plist_sha256=_file_sha256(package_plist))
     manifest_path = output.with_name("source-manifest.json")
@@ -426,25 +447,28 @@ def main():
             source_identity["runtime_logs_clean"] = False
             source_identity["runtime_log_failure"] = str(error)[:300]
         execution_ok = result is not None and result.returncode == 0 and source_identity["runtime_source_stable"] and source_identity["runtime_logs_clean"] and source_identity["godot_binary_stable"] and source_identity.get("packaged_resource_stable", True) and source_identity.get("package_info_plist_stable", True) and source_identity.get("packaged_layout_stable", True)
-        manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources, "execution_status": "pass" if execution_ok else "failed"}, indent=2, sort_keys=True) + "\n")
         if output.is_file():
             retained = json.loads(output.read_text())
             retained["native_status"] = retained.get("status")
             retained["process_rss"] = rss_sampler.snapshot()
-            if retained.get("measurement_schema_version") == 3:
+            if retained.get("measurement_schema_version") in (3, 4):
                 _collect_native_pid_binding(pid_path, stdout_path, retained)
             if not execution_ok:
                 retained["status"] = "failed"
             elif retained.get("status") == "pass":
                 try:
-                    if resource is not None and retained.get("measurement_schema_version") != 3:
-                        raise ValueError("packaged measurements require explicit v3 runtime build and monitor metadata")
+                    if resource is not None and retained.get("measurement_schema_version") not in (3, 4):
+                        raise ValueError("packaged measurements require v3 or newer runtime build and monitor metadata")
                     validate_report(retained)
+                    if args.rendering_method is not None and (retained.get("measurement_schema_version") != 4 or retained["rendering"]["requested_method"] != args.rendering_method):
+                        raise ValueError("explicit launcher backend must match the native v4 request metadata")
                 except ValueError as error:
                     retained["status"] = "failed"
                     retained["validation_failure"] = str(error)
+                    source_identity["report_validation_failure"] = str(error)
             retained["source"] = source_identity
             output.write_text(json.dumps(retained, indent=2, sort_keys=True) + "\n")
+        manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources, "execution_status": "pass" if execution_ok else "failed"}, indent=2, sort_keys=True) + "\n")
     if result.returncode or not source_identity["runtime_logs_clean"]:
         raise SystemExit(f"actual native performance run failed; inspect {stdout_path}")
     if not source_identity["runtime_source_stable"]:
