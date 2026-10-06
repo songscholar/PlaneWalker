@@ -13,6 +13,7 @@ var _boundary: Node2D
 var _legacy_camera_position := Vector2.ZERO
 var _legacy_camera_zoom := Vector2.ONE
 var _launch_mode := false
+var _previous_camera: WeakRef
 
 
 func configure(host: Node, room_host: Node, combat_room: Node2D) -> bool:
@@ -49,10 +50,15 @@ func configure(host: Node, room_host: Node, combat_room: Node2D) -> bool:
 		_boundary.add_child(wall)
 	_boundary.process_mode = Node.PROCESS_MODE_DISABLED
 	_room_host.room_transitioned.connect(_on_room_transitioned)
+	get_viewport().size_changed.connect(_fit_camera)
 	return true
 
 
 func set_launch_mode(value: bool) -> void:
+	if value and not _launch_mode:
+		var current := get_viewport().get_camera_2d()
+		if current != null and current != _camera:
+			_previous_camera = weakref(current)
 	_launch_mode = value
 	for visual: CanvasItem in _legacy_visuals:
 		visual.visible = not value
@@ -63,9 +69,24 @@ func set_launch_mode(value: bool) -> void:
 			body.collision_mask = 0 if value else int(record.mask)
 	_boundary.process_mode = Node.PROCESS_MODE_INHERIT if value else Node.PROCESS_MODE_DISABLED
 	_camera.position = DESIGN_SIZE * 0.5 if value else _legacy_camera_position
-	_camera.zoom = Vector2.ONE if value else _legacy_camera_zoom
+	if value:
+		_fit_camera()
+		_camera.make_current()
+	else:
+		_camera.zoom = _legacy_camera_zoom
+		var previous := _previous_camera.get_ref() as Camera2D if _previous_camera != null else null
+		if is_instance_valid(previous) and previous.is_inside_tree():
+			previous.make_current()
+		_previous_camera = null
 	_camera.reset_smoothing()
 	_camera.force_update_scroll()
+
+
+func _fit_camera() -> void:
+	if _launch_mode and is_instance_valid(_camera):
+		var size := get_viewport().get_visible_rect().size
+		_camera.zoom = Vector2.ONE * maxf(minf(size.x / DESIGN_SIZE.x, size.y / DESIGN_SIZE.y), 0.1)
+		_camera.force_update_scroll()
 
 
 func _on_room_transitioned(_receipt: Dictionary) -> void:

@@ -21,6 +21,7 @@ const Phase := preload("res://scripts/application/run_phase.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Rules := preload("res://scripts/community/local_run_record_rules.gd")
 const Request := preload("res://scripts/modes/boss_rush_catalog.gd")
+const Backdrop := preload("res://scripts/modes/native_mode_arena_backdrop.gd")
 
 var _registry: RefCounted
 var _source: RefCounted
@@ -39,6 +40,7 @@ var _controller: Node2D
 var _scenes: Node
 var _dungeon: Node
 var _presentation: Node
+var _backdrop: CanvasLayer
 var _paused := false
 var _busy := false
 var _active := false
@@ -130,6 +132,9 @@ func _launch_cycle() -> Dictionary:
 	if not _host.install_carry(str(_state.carry_build_codec), str(_state.carry_player_codec)):
 		_busy = false
 		return _reject("launch", &"ENDLESS_CARRY_INVALID")
+	if CombatFeedback.ensure_actor_presentation(current_player()) == null:
+		_busy = false
+		return _reject("launch", &"ENDLESS_NATIVE_INVALID")
 	_state.status = "ACTIVE"
 	_service.mode_session = _state.duplicate(true)
 	_active = true
@@ -158,6 +163,8 @@ func continue_session() -> Dictionary:
 	_busy = false
 	if not restored.ok:
 		return _reject("continue", restored.code)
+	if CombatFeedback.ensure_actor_presentation(current_player()) == null:
+		return _reject("continue", &"ENDLESS_NATIVE_INVALID")
 	_active = true
 	var retained := _checkpoint("checkpoint")
 	if retained.ok:
@@ -287,9 +294,14 @@ func _create_stage() -> bool:
 	_stage = Node2D.new()
 	_stage.name = "EndlessDungeon"
 	add_child(_stage)
+	_backdrop = Backdrop.new()
+	_stage.add_child(_backdrop)
+	if not _backdrop.configure("floor_ruins_of_remnant"):
+		return false
 	_scenes = SceneHost.new()
 	_scenes.name = "LaunchRoomSceneHost"
 	_stage.add_child(_scenes)
+	_scenes.room_transitioned.connect(_on_arena_room_transitioned)
 	_controller = Controller.instantiate()
 	_controller.name = "CombatRoom01"
 	_controller.auto_start = false
@@ -318,6 +330,12 @@ func _create_stage() -> bool:
 	_checkpoint_stamp = ""
 	_frame_checkpoint = int(_state.elapsed_frames)
 	return true
+
+
+func _on_arena_room_transitioned(_receipt: Dictionary) -> void:
+	var room: Node2D = _scenes.active_room()
+	if is_instance_valid(room):
+		_backdrop.configure(str(room.binding_snapshot().binding.floor_id))
 
 
 func _on_frame(_frame: int) -> void:
@@ -418,6 +436,8 @@ func _suspend(value: bool) -> void:
 
 
 func _clear_stage() -> void:
+	if is_instance_valid(_presentation):
+		_presentation.set_launch_mode(false)
 	if is_instance_valid(_controller):
 		_controller.encounter_runner().cancel()
 		var player := current_player()
@@ -437,6 +457,7 @@ func _clear_stage() -> void:
 	_scenes = null
 	_dungeon = null
 	_presentation = null
+	_backdrop = null
 	_process_modes.clear()
 	_active = false
 	_paused = false

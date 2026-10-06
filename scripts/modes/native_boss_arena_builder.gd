@@ -5,6 +5,8 @@ const Bridge := preload("res://scripts/enemies/launch/hostile_frame_bridge.gd")
 const Effects := preload("res://scripts/enemies/launch/launch_hostile_effect_authority.gd")
 const Threats := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Orchestrator := preload("res://scripts/application/run_orchestrator.gd")
+const Artwork := preload("res://scripts/dungeon/native_room_artwork.gd")
+const Backdrop := preload("res://scripts/modes/native_mode_arena_backdrop.gd")
 
 
 static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, request: Dictionary, run_id: String, source_prefix: String, encounter_id: String, player_scene: PackedScene = PlayerScene, frame_bridge: RefCounted = null) -> Dictionary:
@@ -14,12 +16,28 @@ static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, r
 		return {"ok": false, "reason": "scene_resource"}
 	var room: Node2D = room_scene.instantiate()
 	stage.add_child(room)
+	var floor_ids: Variant = definition.template.get("floor_ids", [])
+	if not floor_ids is Array or floor_ids.is_empty():
+		return {"ok": false, "reason": "arena_floor"}
+	var floor_id := str(floor_ids[0])
+	var artwork := Artwork.new()
+	if not artwork.configure({"floor_id": floor_id, "content_id": str(definition.template.id), "room_seed": int(request.seed), "room_type": "boss"}, room):
+		return {"ok": false, "reason": "arena_artwork"}
+	var legacy := room.get_node_or_null("PixelProxyLayer") as CanvasItem
+	if legacy != null:
+		legacy.hide()
+	var backdrop := Backdrop.new()
+	stage.add_child(backdrop)
+	if not backdrop.configure(floor_id):
+		return {"ok": false, "reason": "arena_backdrop"}
 	var player: Node2D = player_scene.instantiate()
 	player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	stage.add_child(player)
 	var native_config := {"milestone": "LAUNCH", "seed": int(request.seed), "character_id": request.character_id, "weapon_id": request.weapon_id, "enabled_time_skills": request.time_abilities.duplicate(), "accessibility_assists": request.accessibility_assists, "character_profile": registry.resolve_character_runtime_profile(StringName(request.character_id), &"LAUNCH"), "weapon_profile": registry.resolve_weapon_runtime_profile(StringName(request.weapon_id), &"LAUNCH")}
 	if not player.configure_run(StringName(run_id)) or not player.configure_loadout(native_config):
 		return {"ok": false, "reason": "player_configuration"}
+	if CombatFeedback.ensure_actor_presentation(player) == null:
+		return {"ok": false, "reason": "player_artwork"}
 	player.global_position = room.get_node("PlayerEntry").global_position
 	var boss: Node2D = boss_scene.instantiate()
 	var source_id := source_prefix + "-" + run_id.sha256_text().substr(0, 40)
@@ -39,6 +57,7 @@ static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, r
 	var motion: Dictionary = boss.configure_launch_room_motion(room, definition.template)
 	if not motion.get("ok", false) or not boss.configure_character_boss_exposure_replay_authority(RefCounted.new()):
 		return {"ok": false, "reason": "boss_room_motion: " + str(motion)}
+	CombatFeedback.ensure_actor_presentation(boss)
 	var payloads := Node2D.new()
 	stage.add_child(payloads)
 	var effects := Effects.new()

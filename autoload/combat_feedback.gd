@@ -506,6 +506,10 @@ func apply_player_cosmetic(actor: Node2D, cosmetic_id: String) -> bool:
 	return proxy != null and proxy.apply_cosmetic(cosmetic_id)
 
 
+func ensure_actor_presentation(actor: Node2D) -> Node:
+	return _ensure_actor_proxy(actor)
+
+
 func _ensure_actor_proxy(actor: Node2D) -> Node:
 	if actor == null or not is_instance_valid(actor):
 		return null
