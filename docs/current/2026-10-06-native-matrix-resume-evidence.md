@@ -85,7 +85,27 @@ does not certify the full matrix.
 
 ## Tests
 
-- `python3 -m unittest tests/contract/playtest/test_native_boss_matrix_report.py`: 20 passed.
+- `python3 -m unittest tests/contract/playtest/test_native_boss_matrix_report.py`: 21 passed.
 - `tests/integration/playtest/native_matrix_persistence_test.tscn`: passed.
 - `python3 tools/runtime_log_validation.py` over both attempt stdout/engine pairs: passed.
 - `git diff --check`: passed.
+
+## Frozen Source Pilot
+
+After commit `f5d6833cec91114bb7909bcb59c93ac8450b3bb9` incorporated the
+native frame observation change, a detached checkout was imported with
+Godot headless editor startup; the follow-up editor startup passes strict
+paired logs. The first pilot before import failed during
+Godot resource loading because generated translation and script cache artifacts
+were absent; it produced no gameplay rows and is retained as an import
+prerequisite failure, not a gameplay result.
+
+The imported frozen checkout then ran `--start 0 --count 2 --jobs 1` to
+`build/native-matrix-pilot-imported/`: both canonical cases completed, strict
+paired logs passed, and the aggregate had zero errors. A same-source
+`--resume` rerun completed without reexecuting gameplay (`resumed_case_count=2`)
+and also had zero errors. The fresh and resumed report hashes are
+`fb20ca8727c444e2f1ede7bf0eb8af27649e57b4862d94541183fd64c8f3c846` and
+`a897a84a45ef8bf9d93a7993a8cbc607f1fd1f326228ecdcb480e2b7ea16cbd0`.
+This is a clean-commit bounded pilot only; it does not certify the 750-case
+matrix or human playability.
