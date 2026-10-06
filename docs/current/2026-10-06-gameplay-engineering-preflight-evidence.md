@@ -1,0 +1,118 @@
+# Gameplay Engineering Preflight Evidence
+
+- Status: In progress / Failed engineering preflight
+- Document Role: Current gameplay and runtime coverage preflight evidence
+- Authority Level: Below approved full-product completion contract
+- Applies To: Frozen gameplay scenes, native five-floor flow and source-bound diagnostic evidence
+- Owner: Project integration lead
+- Depends On: [Gameplay completion plan](../superpowers/plans/2026-10-06-gameplay-ui-product-completion.md)
+- Last Verified: 2026-10-06
+- Certification Status: Not a final clean-checkout, full-coverage, performance, visual-quality or human-playtest certificate
+
+## Frozen Source
+
+The preflight source is
+`build/retained-checkout/gameplay-certification-d195fe7-20261006/`, at explicitly
+authenticated revision `d195fe786f326fa89c913f1156a6abc972556f9e`. Its 599 scoped
+runtime, scene, content and native-runner files still match the complete Git
+tree. The runtime source SHA-256 is
+`0a0f1413e94685c9d3887871d444751b91d871eb174baa0009cfb3de787dcf59`.
+The 413 runtime scripts in the instrumentation manifest also retain their
+original source digests; 411 contain executable statements.
+
+This retained archive resolves Git through its parent repository. Its source
+authentication is valid, but it is engineering preflight evidence, not an
+independent checkout certification. Final certification must use a separate
+Git clone of the final committed source and rerun every required gate there.
+Every build path below is relative to this frozen preflight checkout unless
+explicitly identified as a live-workspace correction.
+
+## Complete Ordinary Scene Suite
+
+`build/full-scenes-preflight-wrapper.log` retains the original full ordinary
+result: **517 passed, 1 failed, 518 total**, process exit 1. Independent strict
+stdout/engine-log validation agrees: 517 pairs pass and the sole failed pair is
+`tests/integration/combat/void_burn_snapshot_query_test.tscn`. A final PASS text
+does not override the runtime invalid-access errors in that test.
+
+The live-workspace correction is commit `0db1352`, which passes the actual
+prepared ticket to the internal Void fallback and retains its ownership,
+immutability and rollback assertions. Focused ordinary and instrumented GREEN
+evidence is documented in
+[Coverage fixture fixes](2026-10-06-coverage-fixture-fixes-evidence.md).
+That correction is not retroactively substituted into the frozen full-suite
+result.
+
+The original full scene suite also passes its 150/150 P14
+character/weapon/time loadout matrix and its controller flow through all five
+floors. The loadout smoke matrix proves the tested loadout workflow; it does
+not stand in for the separate 750 native Boss-combat cases.
+
+## Actual Five-Floor Flow
+
+`build/p15-five-floor-native-run.json` reports `synthetic=false`,
+`complete=true`, 21 rooms and 12153 accepted frames. The actual Main scene
+defeats `ruin_king`, `forest_heart`, `time_sovereign`, `forge_colossus`, and
+`void_throne`, reaches `shattered_freedom`, and verifies the physical
+fresh-profile victory settlement. Its failure list is empty.
+
+The ordinary report and the independently executed instrumented report at
+`build/full-runtime-coverage-preflight/project-copy/build/p15-five-floor-native-run.json`
+are byte-identical. Both have SHA-256
+`a744f898fbf147a0f0a6b339175eafc539be6ab0ad68febe047c628d8f3e3b06`
+and both stdout/engine-log pairs pass strict validation.
+
+The report declares `survival_fixture=p15_full_run_survival_fixture`,
+`unassisted_victory=false`, and `human_playtests=0`. It proves actual native
+room, combat, route, ending and physical settlement integration under that
+fixture. It does not certify difficulty balance or a real player completing
+the game without assistance.
+
+## Native Boss Cases
+
+The source-bound first canonical pilot reaches final Boss HP 0 after 797
+accepted frames, with report SHA-256
+`8d1f68b9d740e42d9f37953a51ad72411781a9f15995495808d93b16baed3d8d`.
+The historical case 338,
+`void_walker|bow|stop+rift|forge_colossus`, passes after 2051 frames with all
+three authored damage phases, two paid Time casts, a cold restoration and
+exact continuation. Its report SHA-256 is
+`1a2bfa15706f155f697a236fee03d361a4dbfd6ba97fe1419a7e17561b264335`.
+
+The complete 750-case request was deliberately stopped while performance work
+continued. Exactly 63 individually validated source-bound receipts remain
+under `build/native-750-logs/`. There is no complete 750-case aggregate and no
+750/750 success claim. These receipts cannot be resumed against changed
+runtime source or mixed into a later source's certificate.
+
+## Instrumented Preflight
+
+The original complete instrumented suite is still running, with its known
+failure result retained. Its log is
+`build/full-runtime-coverage-preflight/scene-suite.stdout.log`. It has already
+reported the unchanged Void fixture failure and 300-second timeouts in
+`local_run_records_test`, `native_combat_checkpoint_test`, and
+`native_content_migration_test`.
+
+Unchanged 900-second diagnostics reuse the exact same instrumented project and
+original-source manifest. All three save tests pass their complete assertions,
+strict log pairs and physical runtime-hit validation. Their respective
+covered original-line counts are 6354, 32088 and 28197, each with one physical
+process report. The live-workspace runner fix, commit `3ae8804`, grants only
+these three instrumented scenes a minimum 900-second budget while preserving
+their ordinary budgets and all assertions. Its complete coverage contract
+suite passes 16/16. See the fixture evidence for exact diagnostic paths and
+RED/GREEN artifacts.
+
+These focused passes do not repair the original full run. A partial union of
+runtime reports is diagnostic evidence only; neither scene success counts nor
+an incomplete line-hit union may be presented as full coverage.
+
+## Remaining Gates
+
+The final committed revision still requires complete ordinary and instrumented
+validation, source authenticity, export/startup, replay and save migration,
+controller and resolution QA, performance and local distributable verification
+in an independent Git clone. The 16.667 ms performance budget has not been
+certified by this preflight. UI/art completion is tracked by the presentation
+lanes, and human playtesting remains zero.
