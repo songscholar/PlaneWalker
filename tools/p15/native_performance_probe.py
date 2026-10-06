@@ -15,13 +15,23 @@ import subprocess
 import sys
 import threading
 
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from runtime_log_validation import validate_logs  # noqa: E402
+
 METRICS = {"player_advance", "host_process", "physics_wait", "observer"}
 FRAME_METRICS = {"frame_work", "frame_wall"}
 COUNTS = {"actors", "summons", "projectiles", "zones", "constructs", "threats"}
 RSS_SOURCES = {"linux": "proc.status.VmRSS_kib", "darwin": "ps.rss_kib", "win32": "GetProcessMemoryInfo.WorkingSetSize"}
 RSS_SCOPE = "godot_process_after_pid_announcement"
+
+
+def _validate_runtime_logs(stdout_path: Path, engine_path: Path) -> None:
+    """Require both producer streams and apply the shared strict log contract."""
+    for path in (stdout_path, engine_path):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"required runtime log is missing or redirected: {path}")
+    validate_logs([stdout_path, engine_path])
 
 
 def _number(value):
@@ -408,8 +418,13 @@ def main():
                 source_identity["packaged_layout_stable"] = _macos_package_plist(args.packaged_binary, args.packaged_resource) == package_plist
             except (OSError, ValueError):
                 source_identity["packaged_layout_stable"] = False
-        logs = stdout_path.read_text(errors="replace") + (engine_path.read_text(errors="replace") if engine_path.is_file() else "")
-        source_identity["runtime_logs_clean"] = not bool(re.search(r"SCRIPT ERROR:|Parse Error:|ERROR:|ObjectDB instances leaked|RID allocations leaked", logs))
+        try:
+            _validate_runtime_logs(stdout_path, engine_path)
+            source_identity["runtime_logs_clean"] = True
+            source_identity["runtime_log_failure"] = ""
+        except ValueError as error:
+            source_identity["runtime_logs_clean"] = False
+            source_identity["runtime_log_failure"] = str(error)[:300]
         execution_ok = result is not None and result.returncode == 0 and source_identity["runtime_source_stable"] and source_identity["runtime_logs_clean"] and source_identity["godot_binary_stable"] and source_identity.get("packaged_resource_stable", True) and source_identity.get("package_info_plist_stable", True) and source_identity.get("packaged_layout_stable", True)
         manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources, "execution_status": "pass" if execution_ok else "failed"}, indent=2, sort_keys=True) + "\n")
         if output.is_file():

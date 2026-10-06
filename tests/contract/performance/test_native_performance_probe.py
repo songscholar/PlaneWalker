@@ -48,6 +48,7 @@ def framed_report(version=2):
 
 
 def fixture_pid_announcement(output, native_report, stream):
+    output.with_name("godot.log").write_text("Godot Engine fixture\n", encoding="utf-8")
     process_id = native_report.get("native_process_id")
     if process_id is not None:
         output.with_name("process.pid").write_text(str(process_id) + "\n", encoding="ascii")
@@ -83,6 +84,65 @@ class NativePerformanceProbeContract(unittest.TestCase):
 
     def test_authentic_report_retains_independent_metrics_and_physical_samples(self):
         self.require_api().validate_report(report())
+
+    def test_runtime_logs_require_a_regular_strict_pair(self):
+        probe = self.require_api()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stdout = root / "stdout.log"
+            engine = root / "godot.log"
+            stdout.write_text("Godot Engine fixture\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                probe._validate_runtime_logs(stdout, engine)
+            engine.write_text("ObjectDB instances leaked at exit\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                probe._validate_runtime_logs(stdout, engine)
+            engine.write_text("Godot Engine fixture\n", encoding="utf-8")
+            probe._validate_runtime_logs(stdout, engine)
+            redirected = root / "redirected.log"
+            redirected.symlink_to(engine)
+            with self.assertRaises(ValueError):
+                probe._validate_runtime_logs(stdout, redirected)
+
+    def test_cli_cannot_retain_pass_with_missing_or_unusable_engine_log(self):
+        probe = self.require_api()
+        for failure in ["missing", "resource_leak", "pages_leak", "redirected", "invalid_utf8"]:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                binary, resource = fixture_package(root)
+                output = root / "build/log-refusal/report.json"
+
+                def run(command, **kwargs):
+                    if command[0] == str(binary):
+                        native_report = framed_report(3)
+                        output.write_text(json.dumps(native_report), encoding="utf-8")
+                        fixture_pid_announcement(output, native_report, kwargs["stdout"])
+                        engine = output.with_name("godot.log")
+                        if failure == "missing":
+                            engine.unlink()
+                        elif failure == "resource_leak":
+                            engine.write_text("resources still in use at exit\n", encoding="utf-8")
+                        elif failure == "pages_leak":
+                            engine.write_text("Pages in use exist at exit\n", encoding="utf-8")
+                        elif failure == "invalid_utf8":
+                            engine.write_bytes(b"\xff")
+                        else:
+                            target = root / "foreign-engine.log"
+                            engine.rename(target)
+                            engine.symlink_to(target)
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+                argv = [str(SOURCE), "--output", str(output), "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
+                with patch.object(probe, "ROOT", root), patch.object(probe.subprocess, "run", side_effect=run), patch.object(probe._ProcessRssSampler, "snapshot", return_value=rss_fixture()), patch.object(sys, "argv", argv), patch("builtins.print"):
+                    with self.assertRaises(SystemExit):
+                        probe.main()
+                retained = json.loads(output.read_text())
+                self.assertEqual(retained["native_status"], "pass")
+                self.assertEqual(retained["status"], "failed")
+                self.assertFalse(retained["source"]["runtime_logs_clean"])
+                self.assertTrue(retained["source"]["runtime_log_failure"])
+                manifest = json.loads(output.with_name("source-manifest.json").read_text())
+                self.assertEqual(manifest["execution_status"], "failed")
 
     def test_release_zero_static_monitor_is_explicit_and_keeps_real_rss(self):
         validator = self.require_api().validate_report
@@ -210,7 +270,7 @@ class NativePerformanceProbeContract(unittest.TestCase):
                     rss["process_id"] = 322
                 argv = [str(SOURCE), "--output", str(output), "--frames", "120", "--hub-frames", "12", "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
                 with patch.object(probe, "ROOT", root), patch.object(probe.subprocess, "run", side_effect=run), patch.object(probe._ProcessRssSampler, "snapshot", return_value=rss), patch.object(sys, "argv", argv), patch("builtins.print"):
-                    with self.assertRaises(ValueError):
+                    with self.assertRaises((SystemExit, ValueError)):
                         probe.main()
                 retained = json.loads(output.read_text())
                 self.assertEqual(retained["native_status"], "pass")
@@ -486,6 +546,7 @@ class NativePerformanceProbeContract(unittest.TestCase):
                     if failure == "report":
                         native_report["observed_peak_counts"]["actors"] = 0
                     output.write_text(json.dumps(native_report), encoding="utf-8")
+                    output.with_name("godot.log").write_text("Godot Engine fixture\n", encoding="utf-8")
                     if failure == "source":
                         script.write_text("extends Node\nvar changed = true\n", encoding="utf-8")
                     if failure == "log":
