@@ -11,6 +11,7 @@ var _origin_global_position := Vector2.ZERO
 var _action_scale := Vector2.ONE
 var _canvas_inverse_scale := Vector2.ONE
 var _world_pixel_unit := Vector2.ONE
+var _atlas: Sprite2D
 
 
 func configure(
@@ -35,6 +36,28 @@ func configure(
 	_origin_global_position = global_position
 	scale = _action_scale * _canvas_inverse_scale
 	queue_redraw()
+
+
+func capture_atlas(source: Sprite2D) -> bool:
+	if source == null or not source.visible or source.texture == null:
+		return false
+	if _atlas == null:
+		_atlas = Sprite2D.new()
+		_atlas.name = "ProductionAfterimageAtlas"
+		add_child(_atlas)
+	_atlas.texture = source.texture
+	_atlas.hframes = source.hframes
+	_atlas.vframes = source.vframes
+	_atlas.frame = source.frame
+	_atlas.flip_h = source.flip_h
+	_atlas.flip_v = source.flip_v
+	_atlas.centered = source.centered
+	_atlas.offset = source.offset
+	_atlas.position = source.position
+	_atlas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_atlas.modulate = source.modulate * Color(_primary, 0.55)
+	queue_redraw()
+	return true
 
 
 func _process(delta: float) -> void:
@@ -63,6 +86,8 @@ func get_snapshot_for_test() -> Dictionary:
 
 
 func _draw() -> void:
+	if _atlas != null:
+		return
 	var width := float(_footprint.x)
 	var height := float(_footprint.y)
 	var rect := Rect2(Vector2(-width * 0.5, -height * 0.5), Vector2(width, height))

@@ -353,6 +353,8 @@ func spawn_afterimage(world_position: Vector2, lifetime: float = 0.22) -> Node2D
 		world_pixel_unit,
 		lifetime
 	)
+	if _actor_atlas != null:
+		afterimage.capture_atlas(_actor_atlas)
 	_afterimage_count += 1
 	return afterimage
 

@@ -83,6 +83,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Player Projectile Artwork](current/2026-10-06-player-projectile-art-evidence.md) | 弓箭、子弹和四元素法术的原生位图替换、物理/回放回归与实际房间渲染验证 | Focused Verified / Final build certification pending |
 | [Narrative Raster Artwork](current/2026-10-06-narrative-art-evidence.md) | Eight NPC portraits, five ending scenes and fourteen additional command symbols with source/import/render validation | Focused Verified / Runtime UI consumption pending |
 | [Challenge Reward Artwork](current/2026-10-06-challenge-reward-art-evidence.md) | Eleven independent reward atlases with authoritative identity and native pixel validation | Focused Verified / Runtime UI consumption pending |
+| [Player Raster Afterimages](current/2026-10-06-player-afterimage-art-evidence.md) | Frozen native character pixels, camera footprint and real-room alpha blend validation | Focused Verified / Final combined certification pending |
 | [Native Hub UI Layout](current/2026-10-06-native-hub-ui-layout-evidence.md) | 九个据点专用页面、滚动/焦点边界与原生布局回归 | Partial milestone / Full UI finish active |
 | [Actor Commit Validation](current/2026-10-06-actor-commit-validation-evidence.md) | 原生提交验证调用收敛、生产物理状态保持与未达标性能实测 | Focused Verified / Sustained FPS gate failed |
 | [Void Checkpoint Projection](current/2026-10-06-void-checkpoint-projection-evidence.md) | 主线程只读历史缓存、线程私有恢复、原生 Save/Replay 回归与局部成本测量 | Focused Verified / Sustained FPS certification pending |
