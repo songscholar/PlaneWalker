@@ -27,7 +27,9 @@ The first capture failed a fixture-only inferred Color type and was corrected;
 its failing logs remain under `build/player-afterimage-room-render.*.log`.
 The attempted ten-scene presentation regression had passing per-scene logs
 but the runner was edited concurrently and emitted a shell syntax error. It
-is not accepted as a complete passing suite; a stable-runner rerun is pending.
+is not accepted as a complete passing suite. The later stable-runner rerun
+at `build/held-weapon-presentation-regressions` passed all eleven presentation
+scenes, including the afterimage contract, with strict per-scene logs.
 
 Actual images are retained under `build/visual-evidence/player-afterimages/`.
 They verify frozen raster pose and blending, not sustained performance or the

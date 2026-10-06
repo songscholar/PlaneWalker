@@ -10,6 +10,7 @@ const REQUIRED_GENERATED := {
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
 	"player_projectiles": ["arrow", "bullet", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
+	"held_weapons": ["sword", "bow", "gun", "gauntlets", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
 	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
 	"event_art": Events.EVENT_IDS,
 	"npc_portraits": ["odysseus", "elara", "sibyl", "hermes", "phia", "morpheus", "nemesis", "vera"],

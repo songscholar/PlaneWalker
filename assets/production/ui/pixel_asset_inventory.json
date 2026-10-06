@@ -707,6 +707,109 @@
       ]
     },
     {
+      "id": "held_weapons",
+      "status": "generated",
+      "scope": "five native held weapon silhouettes with four staff element variants",
+      "assets": [
+        {
+          "id": "sword",
+          "path": "held_weapons/sword.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "795428ca0f73bd7a9b94a847a65dd4f751336b3eb9cc1e9bd9056153e5fbd139"
+        },
+        {
+          "id": "bow",
+          "path": "held_weapons/bow.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "9853a7599f5098c8916d8c6eccbaed188ce057dbb914683466073e36dd2518dc"
+        },
+        {
+          "id": "gun",
+          "path": "held_weapons/gun.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "57ed6725f3efaeba6bceba3e60a7aa4abbd4ec949c6cdafcba350281257e2325"
+        },
+        {
+          "id": "gauntlets",
+          "path": "held_weapons/gauntlets.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "5b5666132e87d69efa911bdf6736fb648054cece6a6bb09d1db4acbfae8ca3c7"
+        },
+        {
+          "id": "staff_arcane",
+          "path": "held_weapons/staff_arcane.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "f2430b753f2ce9133f445c2983f4ac2caa3c2cd23b754660a3e492d52f6f21bd"
+        },
+        {
+          "id": "staff_fire",
+          "path": "held_weapons/staff_fire.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "bb71073f8b3d3652e1990c02f12175724f3dbf31aa6a1868076bdbbd37b23fa7"
+        },
+        {
+          "id": "staff_ice",
+          "path": "held_weapons/staff_ice.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "4751f36ab0bddaa865769694a148350f65dbda0c910011e8483b43a5595fd0a5"
+        },
+        {
+          "id": "staff_lightning",
+          "path": "held_weapons/staff_lightning.png",
+          "kind": "held_weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "cf902b0e2273c273673b5cafef30ad9f95a37d410fc7509c00047d7dc6a08633"
+        }
+      ]
+    },
+    {
       "id": "room_types",
       "status": "generated",
       "scope": "revealed room types and a distinct unknown glyph",

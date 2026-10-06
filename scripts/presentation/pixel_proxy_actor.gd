@@ -6,6 +6,7 @@ signal cue_requested(cue_id: StringName, world_position: Vector2, intensity: flo
 const AfterimageScript := preload("res://scripts/presentation/pixel_proxy_afterimage.gd")
 const ActorAtlasScript := preload("res://scripts/presentation/actor_atlas_projection.gd")
 const EffectAtlasScript := preload("res://scripts/presentation/player_effect_atlas_projection.gd")
+const HeldWeaponAtlasScript := preload("res://scripts/presentation/held_weapon_atlas_projection.gd")
 const PIXEL_UNIT := 2
 const SCREEN_PIXEL_UNIT := 2.0
 const FLASH_BUDGET_WINDOW_SECONDS := 1.0
@@ -206,6 +207,7 @@ var _active_item_cue_id: String = ""
 var _active_item_cue_kind: String = ""
 var _active_item_cue_remaining: float = 0.0
 var _actor_atlas: Sprite2D
+var _held_weapon_atlas: Sprite2D
 var _effect_atlas: Sprite2D
 var _effect_clock := 0.0
 var _action_serial := 0
@@ -253,6 +255,7 @@ func bind_actor(actor: Node2D) -> bool:
 	_apply_pixel_transform()
 	_sync_actor_atlas()
 	_sync_effect_atlas()
+	_sync_held_weapon_atlas()
 	queue_redraw()
 	return true
 
@@ -277,6 +280,7 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 	_update_presentation_facing()
 	_apply_pixel_transform()
 	_sync_effect_atlas()
+	_sync_held_weapon_atlas()
 	queue_redraw()
 
 
@@ -369,6 +373,7 @@ func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void
 	if not _hit_flash_enabled:
 		_flash_remaining = 0.0
 	_sync_effect_atlas()
+	_sync_held_weapon_atlas()
 	queue_redraw()
 
 
@@ -443,6 +448,7 @@ func get_snapshot_for_test() -> Dictionary:
 		"afterimage_count": _afterimage_count,
 		"actor_atlas": _actor_atlas.snapshot() if _actor_atlas != null else {},
 		"effect_atlas": _effect_atlas.snapshot() if _effect_atlas != null else {},
+		"held_weapon_atlas": _held_weapon_atlas.snapshot() if _held_weapon_atlas != null else {},
 		"challenge_rewards": _challenge_rewards.duplicate(true),
 	}
 
@@ -482,6 +488,7 @@ func _advance_animation(delta: float) -> void:
 	_apply_pixel_transform()
 	_sync_actor_atlas()
 	_sync_effect_atlas()
+	_sync_held_weapon_atlas()
 	queue_redraw()
 
 
@@ -498,6 +505,33 @@ func _sync_actor_atlas() -> void:
 		return
 	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
 	_refresh_challenge_rewards()
+
+
+func _sync_held_weapon_atlas() -> void:
+	if _role != "player":
+		return
+	if _held_weapon_atlas == null:
+		_held_weapon_atlas = HeldWeaponAtlasScript.new()
+		_held_weapon_atlas.name = "ProductionHeldWeaponAtlas"
+		add_child(_held_weapon_atlas)
+		_held_weapon_atlas.set_as_top_level(true)
+		_held_weapon_atlas.z_index = z_index
+	if _state == &"death" or not _weapon_snapshot_available:
+		_held_weapon_atlas.visible = false
+		return
+	var identity := "staff_" + _staff_element if _weapon_id == "staff" else _weapon_id
+	var phase := _weapon_phase
+	if _state == &"attack" and _presentation_cue_remaining > 0.0 and _presentation_vfx_id not in NON_ATTACK_VFX_IDS:
+		phase = "ACTIVE"
+	if not _held_weapon_atlas.present(identity, phase, _reduced_motion):
+		return
+	var canvas := get_viewport().get_canvas_transform() if is_inside_tree() else Transform2D.IDENTITY
+	var origin := (canvas * global_position + _facing * 24.0).snapped(Vector2.ONE)
+	_held_weapon_atlas.global_transform = canvas.affine_inverse() * Transform2D(_facing.angle(), Vector2.ONE, 0.0, origin)
+	_held_weapon_atlas.modulate = Color(1.6, 1.6, 1.6) if _flash_remaining > 0.0 else Color.WHITE
+	var tint: Array = _challenge_rewards.get("weapon_tint", [])
+	if tint.size() == 4:
+		_held_weapon_atlas.modulate *= Color(tint[0], tint[1], tint[2], tint[3])
 
 
 func _sync_effect_atlas() -> void:
@@ -1078,19 +1112,12 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	if not weapon_tint.is_empty():
 		accent = Color(weapon_tint[0], weapon_tint[1], weapon_tint[2], weapon_tint[3])
 	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
-	if _weapon_visual_kind() == "bow":
-		_draw_player_bow(accent)
-	elif _weapon_visual_kind() == "gun":
+	if _weapon_visual_kind() == "gun":
 		_draw_player_gun(accent)
 	elif _weapon_visual_kind() == "staff":
 		_draw_player_staff(accent)
 	elif _weapon_visual_kind() == "gauntlets":
 		_draw_player_gauntlets(accent)
-	elif _weapon_visual_kind() == "sword" and _state == &"attack":
-		draw_rect(Rect2(10, -4, 18, 4), accent, true)
-		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
-	elif _weapon_visual_kind() == "sword":
-		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_challenge_rewards()
 
@@ -1158,49 +1185,7 @@ func _draw_active_item_cue() -> void:
 			draw_line(Vector2(-radius, 0), Vector2(radius, 0), cue_color, 4.0)
 
 
-func _draw_player_bow(accent: Color) -> void:
-	var bow_color := accent.darkened(0.18)
-	var nock_x := snappedf(18.0 - 8.0 * _bow_tension, 2.0)
-	draw_polyline(
-		PackedVector2Array([
-			Vector2(18, -14),
-			Vector2(22, -8),
-			Vector2(22, 8),
-			Vector2(18, 14),
-		]),
-		bow_color,
-		2.0,
-		false
-	)
-	draw_polyline(
-		PackedVector2Array([
-			Vector2(18, -14),
-			Vector2(nock_x, 0),
-			Vector2(18, 14),
-		]),
-		Color(0.88, 0.94, 1.0),
-		1.0,
-		false
-	)
-	if _state == &"attack":
-		var arrow_color := Color.WHITE if _bow_charge_tier == "full" else accent
-		draw_rect(Rect2(nock_x, -1, 22.0 - nock_x, 2), arrow_color, true)
-		draw_colored_polygon(
-			PackedVector2Array([Vector2(24, 0), Vector2(20, -4), Vector2(20, 4)]),
-			arrow_color
-		)
-
-
 func _draw_player_gun(accent: Color) -> void:
-	var gun_color := accent.darkened(0.18)
-	draw_rect(Rect2(10, -4, 18, 8), gun_color, true)
-	draw_rect(Rect2(14, 4, 6, 8), gun_color.darkened(0.28), true)
-	draw_rect(Rect2(26, -2, 8, 4), accent, true)
-	if _gun_muzzle_visible():
-		draw_colored_polygon(
-			PackedVector2Array([Vector2(36, 0), Vector2(44, -6), Vector2(42, 0), Vector2(44, 6)]),
-			Color(1.0, 0.86, 0.34)
-		)
 	if _gun_reload_marker_visible():
 		var reload_frame := clampi(int(_player_weapon_snapshot.get("reload_frame", 0)), 0, 48)
 		var marker_x := lerpf(10.0, 34.0, float(reload_frame) / 48.0)
@@ -1214,9 +1199,6 @@ func _draw_player_gun(accent: Color) -> void:
 
 func _draw_player_staff(accent: Color) -> void:
 	var element_color := _staff_element_color()
-	draw_rect(Rect2(12, -3, 24, 5), accent.darkened(0.28), true)
-	draw_rect(Rect2(32, -7, 5, 13), accent, true)
-	draw_circle(Vector2(36, -9), 6.0, element_color)
 	if _staff_cast_circle_visible():
 		draw_arc(Vector2(22, 0), 17.0, 0.0, TAU, 18, element_color, 2.0, false)
 	if _staff_zone_boundary_visible():
@@ -1227,14 +1209,7 @@ func _draw_player_staff(accent: Color) -> void:
 
 
 func _draw_player_gauntlets(accent: Color) -> void:
-	var glove_color := accent.darkened(0.08)
 	var lead_fist := _gauntlets_lead_fist()
-	var left_extension := 10.0 if _state == &"attack" and lead_fist in ["left", "both"] else 0.0
-	var right_extension := 10.0 if _state == &"attack" and lead_fist in ["right", "both"] else 0.0
-	draw_rect(Rect2(8.0 + left_extension, -11.0, 8.0, 8.0), glove_color, true)
-	draw_rect(Rect2(8.0 + right_extension, 3.0, 8.0, 8.0), glove_color.lightened(0.12), true)
-	draw_rect(Rect2(14.0 + left_extension, -9.0, 4.0, 4.0), Color.WHITE, true)
-	draw_rect(Rect2(14.0 + right_extension, 5.0, 4.0, 4.0), Color.WHITE, true)
 	if _gauntlets_punch_wind_visible():
 		var wind_y := -7.0 if lead_fist == "left" else 7.0
 		for index: int in range(3):
