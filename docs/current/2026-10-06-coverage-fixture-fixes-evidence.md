@@ -94,7 +94,7 @@ requirements audit reports no known vulnerabilities in
 change. This focused correction does not certify a complete scene
 suite, full line coverage, FPS, final source or human playtesting.
 
-## Instrumented Save Scene Budgets
+## Instrumented Scene Budgets
 
 The frozen `d195fe7` complete ordinary preflight finishes 517/518 scene tests;
 its only failure is the unchanged Void fixture described above. In the original
@@ -119,7 +119,17 @@ manifest and strict paired-log checks.
 All diagnostic directories in this section are relative to the frozen
 checkout's `build/` directory, not the live project.
 
-`tools/run_tests.sh` gives only these three verified save tests a minimum
+Later, the same original instrumented full suite also reports a 300-second
+timeout in `p14_controller_flow_test`. Its unchanged complete five-floor
+controller and native-command workflow passes a separate 900-second diagnostic
+in `build/controller-flow-instrumented-timeout-rerun-20261006/`. One physical
+process report covers 29601 original lines, verifies against the same manifest,
+and its stdout/engine logs pass strict paired validation. The ordinary full
+preflight already passes this exact scene. Both original timeout and focused
+GREEN diagnostic remain available.
+
+`tools/run_tests.sh` gives only these three verified save tests and the verified
+five-floor controller test a minimum
 900-second budget under instrumentation, requiring a syntactically valid
 manifest SHA-256 and a physical-hit directory. It preserves their existing
 ordinary 300-second minima and every test assertion. Timeout output now names
@@ -141,6 +151,19 @@ The Bash syntax check and `git diff --check` pass. The pinned development,
 coverage and production-art requirements audit reports no known vulnerabilities
 in `build/scene-runner-budget-dependency-audit-20261006.json`; dependencies do
 not change.
+
+The fourth controller budget is added after verifying that the main-workspace
+runner has no active processes and coordinating with the UI lane. Its new
+actual-runner contract is RED in
+`build/scene-runner-budget-controller-red-20261006.log` before implementation.
+The six focused watchdog contracts pass in
+`build/scene-runner-budget-controller-green-20261006.log`. The full suite's
+original source and running frozen runner remain unchanged. The final complete
+coverage contract suite passes 17/17 in
+`build/scene-runner-budget-controller-coverage-contracts-20261006.log`.
+The fresh pinned requirements audit reports no known vulnerabilities in
+`build/scene-runner-budget-controller-audit-20261006.json`; no dependencies
+change.
 
 These focused GREEN diagnostics do not replace the original failed full-suite
 result. Final certification still requires the complete ordinary and

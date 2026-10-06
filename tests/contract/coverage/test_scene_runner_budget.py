@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 LOCAL_RECORDS = "tests/integration/save/local_run_records_test.tscn"
 NATIVE_CHECKPOINT = "tests/integration/save/native_combat_checkpoint_test.tscn"
 NATIVE_MIGRATION = "tests/integration/save/native_content_migration_test.tscn"
+CONTROLLER_FLOW = "tests/integration/ui/p14_controller_flow_test.tscn"
 
 
 class SceneRunnerBudgetTest(unittest.TestCase):
@@ -59,6 +60,14 @@ class SceneRunnerBudgetTest(unittest.TestCase):
                 self.assertEqual(status, 0, output)
                 self.assertIn("Scene tests: 1 passed, 0 failed, 1 total", output)
                 self.assertIn("Code coverage: not collected", output)
+
+    def test_instrumented_five_floor_controller_flow_receives_its_bounded_budget(self):
+        status, output = self.run_fixture(CONTROLLER_FLOW, instrumented=True)
+        self.assertEqual(status, 0, output)
+        self.assertIn("Scene tests: 1 passed, 0 failed, 1 total", output)
+        status, output = self.run_fixture(CONTROLLER_FLOW)
+        self.assertEqual(status, 1, output)
+        self.assertIn(f"[  TIMEOUT ] {CONTROLLER_FLOW} (300s)", output)
 
     def test_ordinary_save_budget_is_unchanged_and_reports_effective_timeout(self):
         for scene in [LOCAL_RECORDS, NATIVE_CHECKPOINT, NATIVE_MIGRATION]:

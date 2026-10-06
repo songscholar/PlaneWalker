@@ -92,7 +92,8 @@ failure result retained. Its log is
 `build/full-runtime-coverage-preflight/scene-suite.stdout.log`. It has already
 reported the unchanged Void fixture failure and 300-second timeouts in
 `local_run_records_test`, `native_combat_checkpoint_test`, and
-`native_content_migration_test`.
+`native_content_migration_test`. It subsequently reports a fourth timeout in
+the complete five-floor `p14_controller_flow_test`.
 
 Unchanged 900-second diagnostics reuse the exact same instrumented project and
 original-source manifest. All three save tests pass their complete assertions,
@@ -103,6 +104,15 @@ these three instrumented scenes a minimum 900-second budget while preserving
 their ordinary budgets and all assertions. Its complete coverage contract
 suite passes 16/16. See the fixture evidence for exact diagnostic paths and
 RED/GREEN artifacts.
+
+The unchanged controller workflow also passes its own 900-second diagnosis,
+with one physical runtime report covering 29601 original lines and a strict
+log-pair pass. A separate live-workspace follow-up gives this verified
+instrumented scene the same 900-second minimum while keeping its ordinary
+300-second budget. It is applied only after confirming that no main-workspace
+scene runner is active. The complete coverage contract suite with all four
+budgets passes 17/17, with a fresh dependency audit finding no known
+vulnerabilities. Exact artifacts are listed in the fixture evidence.
 
 These focused passes do not repair the original full run. A partial union of
 runtime reports is diagnostic evidence only; neither scene success counts nor

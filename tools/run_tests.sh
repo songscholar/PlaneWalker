@@ -123,7 +123,7 @@ run_with_timeout() {
 	if [[ "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" || "${scene}" == "tests/integration/ui/p14_controller_flow_test.tscn" || "${scene}" == "tests/integration/combat/launch_elite_mirroring_test.tscn" ]] && (( scene_timeout_seconds < 300 )); then
 		scene_timeout_seconds=300
 	fi
-	if [[ "${PLANEWALKER_COVERAGE_MANIFEST_SHA256:-}" =~ ^[0-9a-f]{64}$ && -n "${PLANEWALKER_COVERAGE_HITS_DIR:-}" ]] && [[ "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" ]] && (( scene_timeout_seconds < 900 )); then
+	if [[ "${PLANEWALKER_COVERAGE_MANIFEST_SHA256:-}" =~ ^[0-9a-f]{64}$ && -n "${PLANEWALKER_COVERAGE_HITS_DIR:-}" ]] && [[ "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" || "${scene}" == "tests/integration/ui/p14_controller_flow_test.tscn" ]] && (( scene_timeout_seconds < 900 )); then
 		scene_timeout_seconds=900
 	fi
 	effective_timeout_seconds="${scene_timeout_seconds}"

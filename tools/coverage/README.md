@@ -96,7 +96,8 @@ coverage. The tool checks source hashes against the original project after
 execution, so measure an immutable committed checkout during parallel work.
 
 The instrumented runner gives `local_run_records_test`,
-`native_combat_checkpoint_test`, and `native_content_migration_test` a minimum
+`native_combat_checkpoint_test`, `native_content_migration_test`, and the
+five-floor `p14_controller_flow_test` a minimum
 900-second scene budget when both the manifest SHA-256 and physical-hit directory
 are configured. Uninstrumented budgets remain unchanged. The complete boundary
 and restoration assertions still run, hangs remain bounded, and timeout messages
