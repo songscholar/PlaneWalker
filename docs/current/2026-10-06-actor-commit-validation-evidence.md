@@ -137,3 +137,44 @@ the measured production Boss runtime SHA-256 is
 Live private-definition changes, including integer-to-equal-float edits, still
 require exact typed context invalidation. Further performance work must retain
 that contract and measure the actual later-phase workload.
+
+## Later-Phase Rendered Follow-Up
+
+The same frozen projects also ran `--phase 2`, after 2,501 actual Sword admission
+frames. The two long scene-suite wrappers, PIDs 71980 and 74830, paused at scene
+boundaries; their current Godot children finished normally. Both wrappers
+resumed immediately after these probes. No arbitrary system process was paused.
+
+Reports are `same-load-before/build/rendered-phase2-quiet-before/report.json`
+and `same-load-after/build/rendered-phase2-quiet-after/report.json`. Both accept
+600/600 consecutive frames 2,502 through 3,101, retain 601 tape observations,
+stable executed source/Godot identities, strict clean paired logs, exit zero,
+and physically exact recording endpoints. The 415 runtime source manifests
+still differ only in the two Actor files. Content fingerprints remain identical
+to the phase-zero measurements. Actual peaks are one Actor, six threats, three
+zones, and zero projectiles, constructs, or summons.
+
+| Metric | Original mean / p95 ms | Candidate mean / p95 ms |
+| --- | ---: | ---: |
+| Player advance | 60.753 / 109.984 | 65.554 / 115.730 |
+| Same-frame work | 62.828 / 111.983 | 67.910 / 118.942 |
+| Same-frame wall | 75.320 / 130.187 | 81.759 / 133.374 |
+| Observed process RSS peak, bytes | 1372585984 | 1596506112 |
+
+Each process has one unavailable RSS sample, explicitly retained in its report.
+The earlier original run, `rendered-phase2-before/`, overlapped active scene
+suites and measured Player mean 49.743 ms. Its paired logs pass, but it is not
+the quiet-window comparison. The variation between original runs shows that
+removing concurrent suites did not eliminate shared-host scheduling/memory
+noise. The candidate does not demonstrate a stable total-frame improvement,
+and every listed workload remains above the 16.667 ms frame budget.
+
+Both quiet-window recordings retain first sample hash
+`8b7b8ab43674e54121d4568336b5ae14de29b4a9a522acc5c2743a64b83dfe11`
+and last sample hash
+`fd46d302787af37d90f09747b52e8faa08395e00b0505fc087edbc6c45ec105a`.
+Report SHA-256 values are respectively
+`a6270d36564382f7350c3c6688cd667e41fd2f5942ba911b683738ecf56cf5cb`
+and `e81344a636213b6e1fb56b19e688cfe650ec75cbc3643be17582b1cbb203dd24`.
+Native duration remains ten seconds and status remains `INTERRUPTED`; the
+sustained 60 FPS, 45-minute soak, and real player feedback gates remain open.
