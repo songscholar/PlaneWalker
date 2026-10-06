@@ -1,7 +1,7 @@
 # Actor Commit Validation Evidence
 
 - Status: Focused Verified / Sustained 60 FPS gate pending
-- Document Role: Actual Actor transaction and same-workload measurement evidence
+- Document Role: Current Actor transaction and same-workload measurement evidence
 - Authority Level: Below approved full-product completion contract
 - Applies To: Public and native Launch Hostile/Boss Actor commits
 - Owner: Plane Walker performance lane
