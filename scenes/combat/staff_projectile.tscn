@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/combat/staff_projectile.gd" id="1_staff_projectile"]
+[ext_resource type="Script" path="res://scripts/presentation/player_projectile_atlas_projection.gd" id="2_art"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_staff_projectile"]
 radius = 9.6
@@ -10,9 +11,10 @@ collision_layer = 0
 collision_mask = 5
 script = ExtResource("1_staff_projectile")
 
-[node name="Visual" type="Polygon2D" parent="."]
-color = Color(0.72, 0.48, 1, 1)
-polygon = PackedVector2Array(14, 0, 5, -6, -3, -7, -11, 0, -3, 7, 5, 6)
+[node name="Visual" type="Sprite2D" parent="."]
+script = ExtResource("2_art")
+projectile_id = "staff_arcane"
+bind_staff_element = true
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_staff_projectile")

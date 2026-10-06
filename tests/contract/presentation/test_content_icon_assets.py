@@ -34,7 +34,7 @@ class ContentIconAssetsTest(unittest.TestCase):
     def test_icons_and_effects_stay_on_the_shared_palette_without_alpha_noise(self):
         palette = json.loads((ROOT / "assets/production/palettes/plane_walker_modern.json").read_text())
         allowed = {tuple(bytes.fromhex(color[1:])) + (255,) for color in palette["colors"]}
-        for category in (*CATEGORIES, "weapons", "time_abilities", "player_effects", "mode_art", "room_types", "event_art", "controls"):
+        for category in (*CATEGORIES, "weapons", "time_abilities", "player_effects", "player_projectiles", "mode_art", "room_types", "event_art", "controls"):
             for path in (ART / category).glob("*.png"):
                 with self.subTest(asset=path.name), Image.open(path) as atlas:
                     self.assertTrue(set(atlas.get_flattened_data()) <= allowed | {(0, 0, 0, 0)})
@@ -62,6 +62,16 @@ class ContentIconAssetsTest(unittest.TestCase):
         controls = next(row for row in inventory["batches"] if row["id"] == "controls")
         self.assertEqual({row["id"] for row in controls["assets"]}, {"decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back"})
 
+    def test_player_projectiles_have_distinct_four_frame_pixel_sequences(self):
+        inventory = json.loads((ART / "pixel_asset_inventory.json").read_text())
+        batch = next(row for row in inventory["batches"] if row["id"] == "player_projectiles")
+        self.assertEqual({row["id"] for row in batch["assets"]}, {"arrow", "bullet", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"})
+        self.assertEqual(len({row["sha256"] for row in batch["assets"]}), 6)
+        for row in batch["assets"]:
+            with Image.open(ART / row["path"]) as image:
+                self.assertEqual(image.size, (128, 32))
+                self.assertEqual(len({image.crop((x * 32, 0, (x + 1) * 32, 32)).tobytes() for x in range(4)}), 4)
+
     def test_exact_regeneration_authenticates_each_declared_resource(self):
         spec = importlib.util.spec_from_file_location("ui_asset_renderer", ROOT / "tools/production_art/generate_ui_asset_slice.py")
         renderer = importlib.util.module_from_spec(spec)
@@ -69,7 +79,7 @@ class ContentIconAssetsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
             renderer.generate(destination)
-            for category in (*CATEGORIES, "weapons", "time_abilities", "player_effects", "mode_art", "room_types", "event_art", "controls"):
+            for category in (*CATEGORIES, "weapons", "time_abilities", "player_effects", "player_projectiles", "mode_art", "room_types", "event_art", "controls"):
                 for path in (destination / category).glob("*.png"):
                     self.assertEqual(path.read_bytes(), (ART / category / path.name).read_bytes(), path.name)
 

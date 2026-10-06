@@ -41,7 +41,7 @@ const VALID_ACTION_IDS: Array[String] = [
 @export var trail_tick_damage_multiplier: float = 0.0
 @export var trail_damage_type: int = DamageInfoScript.DamageType.TIME
 
-@onready var visual: Polygon2D = $Visual
+@onready var visual: CanvasItem = $Visual
 
 var direction: Vector2 = Vector2.RIGHT
 var source: Node

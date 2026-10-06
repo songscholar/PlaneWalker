@@ -628,6 +628,85 @@
       ]
     },
     {
+      "id": "player_projectiles",
+      "status": "generated",
+      "scope": "arrow, bullet and four staff element projectile strips",
+      "assets": [
+        {
+          "id": "arrow",
+          "path": "player_projectiles/arrow.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "720fdd926bc12152879f8632845f8f2c5e9dfbd02d6b2cebdc7b951b2686c7bc"
+        },
+        {
+          "id": "bullet",
+          "path": "player_projectiles/bullet.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "92780773101f30f2c4098ccbf633f8cecc2486f71c847566a060156493925dd8"
+        },
+        {
+          "id": "staff_arcane",
+          "path": "player_projectiles/staff_arcane.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "b395d7841768c21c96760925c59750c1f7df1e5ea535d8b5ed22c0903e6b6db7"
+        },
+        {
+          "id": "staff_fire",
+          "path": "player_projectiles/staff_fire.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "a05473bcceff39365b8120ebfcc3be1c324fbf7485878965fc0417c74bbe2d93"
+        },
+        {
+          "id": "staff_ice",
+          "path": "player_projectiles/staff_ice.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "de1cdd519ef74af21c88feac0f9c84740f4436f3024057345555c23a90495bf3"
+        },
+        {
+          "id": "staff_lightning",
+          "path": "player_projectiles/staff_lightning.png",
+          "kind": "player_projectiles",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "82136614d096e37a7d51b52b1609a1166807a975a9509dfdbb8b254c0faf6624"
+        }
+      ]
+    },
+    {
       "id": "room_types",
       "status": "generated",
       "scope": "revealed room types and a distinct unknown glyph",

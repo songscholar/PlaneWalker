@@ -30,7 +30,7 @@ const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 @export var trail_tick_damage_multiplier: float = 0.0
 @export var trail_slow_ratio: float = 0.0
 
-@onready var visual: Polygon2D = $Visual
+@onready var visual: CanvasItem = $Visual
 
 var direction: Vector2 = Vector2.RIGHT
 var source: Node

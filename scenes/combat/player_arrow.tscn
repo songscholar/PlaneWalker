@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/combat/player_arrow.gd" id="1_player_arrow"]
+[ext_resource type="Script" path="res://scripts/presentation/player_projectile_atlas_projection.gd" id="2_art"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_arrow"]
 radius = 5.0
@@ -10,9 +11,9 @@ collision_layer = 0
 collision_mask = 5
 script = ExtResource("1_player_arrow")
 
-[node name="Visual" type="Polygon2D" parent="."]
-color = Color(0.55, 0.95, 0.72, 1)
-polygon = PackedVector2Array(16, 0, -8, -4, -4, 0, -8, 4)
+[node name="Visual" type="Sprite2D" parent="."]
+script = ExtResource("2_art")
+projectile_id = "arrow"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_arrow")
