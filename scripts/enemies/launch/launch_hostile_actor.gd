@@ -611,7 +611,12 @@ func commit_launch_frame(ticket: Dictionary) -> bool:
 
 
 func _commit_owned_launch_frame(ticket: Dictionary) -> bool:
-	if not can_commit_launch_frame(ticket) or not _restore_actor_state(ticket.after):
+	if not can_commit_launch_frame(ticket):
+		return false
+	# Custom validators may intervene after checking an earlier child state.
+	if get_script() in [LaunchHostileActor, LaunchBossActor] and elemental_status_runtime.get_script() in [LaunchStatus, BossElementalStatusRuntime] and (_affix_runtime == null or _affix_runtime.get_script() == AffixRuntime):
+		_install_validated_actor_state(ticket.after)
+	elif not _restore_actor_state(ticket.after):
 		return false
 	_prepared_frame_committed = true
 	return true
@@ -1431,6 +1436,10 @@ func _can_restore_actor_state(value: Dictionary) -> bool:
 func _restore_actor_state(value: Dictionary) -> bool:
 	if not _can_restore_actor_state(value):
 		return false
+	return _install_validated_actor_state(value)
+
+
+func _install_validated_actor_state(value: Dictionary) -> bool:
 	_launch_runtime.restore_snapshot(value.runtime)
 	if _affix_runtime != null:
 		_affix_runtime.restore_snapshot(value.affix_runtime)

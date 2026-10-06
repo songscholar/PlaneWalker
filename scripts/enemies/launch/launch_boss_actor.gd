@@ -118,8 +118,8 @@ func _native_geometry_matches_definition() -> bool:
 	return watch != null and shape != null and shape.shape is CircleShape2D and not shape.disabled and watch.transform == Transform2D.IDENTITY and shape.transform == Transform2D.IDENTITY and shape.shape.radius == float(_launch_definition.collision_radius_px) and watch.collision_layer == (0 if _native_runtime_is_terminal(_launch_runtime) else 4) and watch.collision_mask == 0 and primary.collision_layer == 0
 
 
-func _restore_actor_state(value: Dictionary) -> bool:
-	if not super._restore_actor_state(value):
+func _install_validated_actor_state(value: Dictionary) -> bool:
+	if not super._install_validated_actor_state(value):
 		return false
 	_refresh_control_visual()
 	return true
