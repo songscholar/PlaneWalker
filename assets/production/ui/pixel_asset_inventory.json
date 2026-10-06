@@ -301,7 +301,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "435674d43860982667d5d583a08bffed840ccc899ebdc1efbc107a9d37e1f5d0"
+          "sha256": "380a1cbdaabb7a93d914055b81b0985784f49dfcdba342bb5064a33214a0fa66"
         },
         {
           "id": "bow",
@@ -313,7 +313,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "02aa02d519eb28e0307dc9791d4f5073bb21cf7183c5b9acd61dd75200b3d43d"
+          "sha256": "282541268af508e687ae7d0f10bb2c1133067dfea4fcd583a53e24fb24f9a3e5"
         },
         {
           "id": "gun",
@@ -325,7 +325,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "cacfa764fae002773de47fa04ba1d2deeeb942e77fa517ed52f796fb2db86864"
+          "sha256": "ff0c4d8cdab71cc150517fde4adfbbbdf281e8ef7a4f32babaca9011e49f8265"
         },
         {
           "id": "staff",
@@ -337,7 +337,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "02b7ac21adb514ba5a509711df2612b354c68deca288540a4e205a28cc87357d"
+          "sha256": "d08a621b4b5a61d1b23b679e73033a764ed2b972e4f3b21a6e63976c205256e4"
         },
         {
           "id": "gauntlets",
@@ -349,7 +349,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7c189337ec5cca8fd588cbe6e90acd74313e4367d1ef9c21808a46d195b77651"
+          "sha256": "29938d8e17b9cb9d428006296cbac5e9268cc09259138341487729bf05a5ed6a"
         }
       ]
     },
@@ -368,7 +368,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59291e5b0ff931da38641405fe9f0d6739280f83b1f06c26106ca88aaeb7f0de"
+          "sha256": "a0742c1593a4d5cc106977299755138a3ba7c7ae5a212f54e13c0c4eabe7fde8"
         },
         {
           "id": "rewind",
@@ -380,7 +380,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "1fc906f88dfd054e01214352586366a479ad171bebe3cbcc3e6b509a9ba373af"
+          "sha256": "2f35355562812be8b7dbaa6cb6f29be1aff488a18eac6150fae994385255b3bc"
         },
         {
           "id": "accelerate",
@@ -392,7 +392,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "051293c3ba3d66c15f46271d421396949705210bb9658190b507db7b52a992d3"
+          "sha256": "7c6035cd95abbce0e9250032b9f8359c938b541fd4efe848c6e6018de737d3c6"
         },
         {
           "id": "rift",
@@ -404,7 +404,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855bab63974817d7e2f2f103b325b2c5420c706eb9feb4ff75182d0491e5ca15"
+          "sha256": "c8d3387fb01a3a2fcadf3ccc7777877f2e373dc58df07eeae610d8afc53cd1a9"
         }
       ]
     },
@@ -423,7 +423,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7a71b796b2a8dc5c96fe9dab3c8058d85e9db4850284042cb1af4bbd6d50e896"
+          "sha256": "1c9c14fc9d77d405c7bf9f37651118ecd54718d89a722a2b44c9345f6084b324"
         },
         {
           "id": "arrow_trail",
@@ -435,7 +435,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "50c79617c18fe92da64a331cf32084558667b5e248a679cfcffd4c944f63eb6a"
+          "sha256": "1c7a50555907991a70b43cb487b6f176035a948d3d86e07b93ba1655626755be"
         },
         {
           "id": "muzzle_flash",
@@ -447,7 +447,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "b33fa9ae5b61fcb038243debbded0f22cc63f363f449dbad80c02eef03114b7f"
+          "sha256": "9eb4334cdc5cbb2fe9cdc5a85bd0f194df72393bd817bf7476dafaf5f692cc6b"
         },
         {
           "id": "spell_burst",
@@ -459,7 +459,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d8108ed173e67cd43fcde7e6348b0201772e05e62d0dbeb5fe189b619b12d370"
+          "sha256": "c7b3d81cb2509c45848496bc29f1431f2411737c8eb6a964c9f4dbc7cfcfe05e"
         },
         {
           "id": "time_ring",
@@ -471,7 +471,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "86cd755eae2be8fae23fc0397a3acf87c7bfd486315c81e57c16eb1dd2c2e560"
+          "sha256": "2465d2bd06b4f3ab358b58b4c6b6c934c5c6c6fc2c0c971f326fdb80d6b29b1a"
         },
         {
           "id": "rift_bloom",
@@ -483,7 +483,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "bb423b6efd1813c82c5376936d74b6e57f3c7b756298da85a1e4994144d91d5e"
+          "sha256": "951a9e0b1dec9a1ad50977a75773e9571aa951008cab0cf203ddb6ad9f967a84"
         }
       ]
     },
@@ -502,7 +502,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "glyph_family": 10
         },
         {
           "id": "stasis_lens",
@@ -514,7 +515,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "brittle_clock",
@@ -526,7 +528,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "weakpoint_prism",
@@ -538,7 +541,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "frozen_afterimage",
@@ -550,7 +554,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "dd99e7e8d707f3fc2bbae479ffc0d227c0915243e69c76430c20298e46ba4325",
+          "glyph_family": 11
         },
         {
           "id": "absolute_zero_device",
@@ -562,7 +567,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "e010643d8326472c251f5fa21f0a39a5c4fadb1444fce84f75ff938b479209b7",
+          "glyph_family": 7
         },
         {
           "id": "rewind_echo",
@@ -574,7 +580,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "anchor_thread",
@@ -586,7 +593,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "glyph_family": 3
         },
         {
           "id": "history_blade",
@@ -598,7 +606,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "echo_reservoir",
@@ -610,7 +619,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "bb6cc606f8d9b64f802434f9799dd8a92e0b6ff65d2ab05ca76d2a33bf2b3cc2",
+          "glyph_family": 5
         },
         {
           "id": "pathbreaker_lens",
@@ -622,7 +632,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "paradox_beacon",
@@ -634,7 +645,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "0af80cf16ca90a2e817f079674859f34a57f01e6e600c5dbf25cb34224c56c82"
+          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "glyph_family": 10
         },
         {
           "id": "rift_engine",
@@ -646,7 +658,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "rift_anchor",
@@ -658,7 +671,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "glyph_family": 3
         },
         {
           "id": "folded_corridor",
@@ -670,7 +684,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "rift_conductor",
@@ -682,7 +697,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "rift_snare",
@@ -694,7 +710,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "gravity_snare_device",
@@ -706,7 +723,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "accelerated_combo",
@@ -718,7 +736,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "cadence_core",
@@ -730,7 +749,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "0af80cf16ca90a2e817f079674859f34a57f01e6e600c5dbf25cb34224c56c82"
+          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "glyph_family": 6
         },
         {
           "id": "overdrive_heart",
@@ -742,7 +762,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "glyph_family": 6
         },
         {
           "id": "accelerant_window",
@@ -754,7 +775,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "glyph_family": 6
         },
         {
           "id": "efficient_overdrive",
@@ -766,7 +788,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "glyph_family": 10
         },
         {
           "id": "redline_injector",
@@ -778,7 +801,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "glyph_family": 10
         },
         {
           "id": "void_brink",
@@ -790,7 +814,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "void_contract",
@@ -802,7 +827,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "hunger_edge",
@@ -814,7 +840,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "abyssal_siphon",
@@ -826,7 +853,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "blood_price_relic",
@@ -838,7 +866,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "e010643d8326472c251f5fa21f0a39a5c4fadb1444fce84f75ff938b479209b7",
+          "glyph_family": 7
         },
         {
           "id": "cleaving_moment",
@@ -850,7 +879,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "evasive_guard_route",
@@ -862,7 +892,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "glyph_family": 3
         },
         {
           "id": "counter_battery",
@@ -874,7 +905,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "glyph_family": 6
         },
         {
           "id": "warded_edge",
@@ -886,7 +918,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "aegis_reversal",
@@ -898,7 +931,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "glyph_family": 3
         },
         {
           "id": "piercing_draw",
@@ -910,7 +944,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "tempo_barrage",
@@ -922,7 +957,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "focused_draw",
@@ -934,7 +970,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "ricochet_matrix",
@@ -946,7 +983,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "425d53e1e4b45f906aade6e8cf5fc90b172a3d4abdca64511bb559925acf11c1",
+          "glyph_family": 9
         },
         {
           "id": "railshot_module",
@@ -958,7 +996,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "425d53e1e4b45f906aade6e8cf5fc90b172a3d4abdca64511bb559925acf11c1",
+          "glyph_family": 9
         },
         {
           "id": "mirror_seed",
@@ -970,7 +1009,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "phantom_lens",
@@ -982,7 +1022,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "glyph_family": 1
         },
         {
           "id": "legion_core",
@@ -994,7 +1035,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "glyph_family": 6
         },
         {
           "id": "decoy_crown",
@@ -1006,7 +1048,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5b35fef23941b8aeec853d8731f4453882657d062397759b10dc2e33d2a3d785"
+          "sha256": "73902f5d89f3237fff1038fa977a43a036ce8cb5f1474bee0c71ebc5246fc160",
+          "glyph_family": 8
         },
         {
           "id": "army_of_yesterday",
@@ -1018,7 +1061,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "bb6cc606f8d9b64f802434f9799dd8a92e0b6ff65d2ab05ca76d2a33bf2b3cc2",
+          "glyph_family": 5
         },
         {
           "id": "chronal_battery",
@@ -1030,7 +1074,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "quickened_blade",
@@ -1042,7 +1087,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "552df3001a8cf8d50e25bc13699f17b23adb61069d7638dda3be9b6f25c05349"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "rewind_salve",
@@ -1054,7 +1100,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "glyph_family": 0
         },
         {
           "id": "rift_current",
@@ -1066,7 +1113,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4d3faa09d15d32c7ff420dd393dfd56bc60c8f1b55687e88e03f3b66fe776ab1"
+          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "glyph_family": 4
         },
         {
           "id": "sword_edge",
@@ -1078,7 +1126,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "glyph_family": 2
         },
         {
           "id": "tempered_guard",
@@ -1090,7 +1139,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "3b92be05252550be70309c30b4f07d0d649bdd7f7264bd5d7ea8b9ab355de2f0"
+          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "glyph_family": 3
         }
       ]
     },
@@ -1109,7 +1159,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5914e06b097f21ea12262e1217828b7d751bad8520e4d5423e06402d0910dde3"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_stop_weakpoint",
@@ -1121,7 +1172,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "glyph_family": 1
         },
         {
           "id": "bls_survive_thread",
@@ -1133,7 +1185,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_sword_tempo",
@@ -1145,7 +1198,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_stasis_shatter",
@@ -1157,7 +1211,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_cold_execution",
@@ -1169,7 +1224,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855502b4f7b4b1a53becc7abb1c7a63a1661b4867944d8a85775f6097a21ba51"
+          "sha256": "1478b1118733284b14fedd8cc7438c0b139d9b68a910ba8d2a38aaf5becdbb05",
+          "glyph_family": 7
         },
         {
           "id": "bls_anchor_memory",
@@ -1181,7 +1237,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "0af5a5e37377d6bb381d960d2aa399d9ca77b5608f4ee0d364b35b1c25a0ef97",
+          "glyph_family": 3
         },
         {
           "id": "bls_echo_harvest",
@@ -1193,7 +1250,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "6b3f21ee4274161354267d5d254d84713669d514ddd3e6af3ee261aa33681c9f",
+          "glyph_family": 5
         },
         {
           "id": "bls_folded_ground",
@@ -1205,7 +1263,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "glyph_family": 4
         },
         {
           "id": "bls_projectile_slow",
@@ -1217,7 +1276,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855502b4f7b4b1a53becc7abb1c7a63a1661b4867944d8a85775f6097a21ba51"
+          "sha256": "20b347c4deff50858ffb4889ff16e470b1459967bc637e07bd1bc0fe131defbd",
+          "glyph_family": 10
         },
         {
           "id": "bls_rift_bloom",
@@ -1229,7 +1289,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5914e06b097f21ea12262e1217828b7d751bad8520e4d5423e06402d0910dde3"
+          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "glyph_family": 4
         },
         {
           "id": "bls_cadence_chain",
@@ -1241,7 +1302,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "6cb06ac2d16295acf5357d5f001fd8f72b039faa24388b0232d117e1fa213785",
+          "glyph_family": 2
         },
         {
           "id": "bls_overdrive_refund",
@@ -1253,7 +1315,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5914e06b097f21ea12262e1217828b7d751bad8520e4d5423e06402d0910dde3"
+          "sha256": "20b347c4deff50858ffb4889ff16e470b1459967bc637e07bd1bc0fe131defbd",
+          "glyph_family": 10
         },
         {
           "id": "bls_void_threshold",
@@ -1265,7 +1328,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855502b4f7b4b1a53becc7abb1c7a63a1661b4867944d8a85775f6097a21ba51"
+          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "glyph_family": 4
         },
         {
           "id": "bls_hunger_conversion",
@@ -1277,7 +1341,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "1478b1118733284b14fedd8cc7438c0b139d9b68a910ba8d2a38aaf5becdbb05",
+          "glyph_family": 7
         },
         {
           "id": "bls_bloodless_focus",
@@ -1289,7 +1354,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "glyph_family": 1
         },
         {
           "id": "bls_counter_window",
@@ -1301,7 +1367,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "6bfd5429c1f9a44e760fb31402a182c344dec43cab047ff60c9132a4fe00e593",
+          "glyph_family": 11
         },
         {
           "id": "bls_guard_reserve",
@@ -1313,7 +1380,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855502b4f7b4b1a53becc7abb1c7a63a1661b4867944d8a85775f6097a21ba51"
+          "sha256": "0af5a5e37377d6bb381d960d2aa399d9ca77b5608f4ee0d364b35b1c25a0ef97",
+          "glyph_family": 3
         },
         {
           "id": "bls_aegis_tempo",
@@ -1325,7 +1393,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_piercing_line",
@@ -1337,7 +1406,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "616d4e52da156cbf0e362c1ba030b0aae1c8eb0ecc07b62cfc2fd63f4a9e8e99"
+          "sha256": "42d6917f0c00546f297cf9747464810e3ca8d6e83eef396f933cdedc1cd01cce",
+          "glyph_family": 9
         },
         {
           "id": "bls_weakpoint_refund",
@@ -1349,7 +1419,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "glyph_family": 4
         },
         {
           "id": "bls_ballistic_clock",
@@ -1361,7 +1432,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5914e06b097f21ea12262e1217828b7d751bad8520e4d5423e06402d0910dde3"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_mirror_action",
@@ -1373,7 +1445,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "glyph_family": 1
         },
         {
           "id": "bls_legion_focus",
@@ -1385,7 +1458,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "glyph_family": 1
         },
         {
           "id": "bls_decoy_stride",
@@ -1397,7 +1471,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "899c51aa448fa8dcf1a9b1641670f8bfd41b666a295645c3eae8506e5aafc8a0"
+          "sha256": "d56facbcac7a431fc2da2bfb608ac689f514ad9141b0c6bb658b4f0e41d5c4cb",
+          "glyph_family": 6
         },
         {
           "id": "bls_chronal_reserve",
@@ -1409,7 +1484,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_wayfinder_mercy",
@@ -1421,7 +1497,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "855502b4f7b4b1a53becc7abb1c7a63a1661b4867944d8a85775f6097a21ba51"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         },
         {
           "id": "bls_adaptive_arsenal",
@@ -1433,7 +1510,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "475ad6229501e005cd890fa85e8477565d6347badd2d39c57c90eafa8ebcb941"
+          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "glyph_family": 0
         }
       ]
     },
@@ -1452,7 +1530,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f96abec0dba4d7b08c2f4c58b525e702b349f7382579f613d2ed68da8b0a3590"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "brittle_vitality",
@@ -1464,7 +1543,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "66517693800c01c05ac8a4bdc1cc58e72b745f391af4d70cae69e242ede1dd10",
+          "glyph_family": 2
         },
         {
           "id": "glass_tempo",
@@ -1476,7 +1556,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "narrow_escape",
@@ -1488,7 +1569,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
+          "glyph_family": 9
         },
         {
           "id": "overclocked_stasis",
@@ -1500,7 +1582,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "605fde581487025e5bd3e90157f5feb0916a1445ca262cbe0ebf5b175f83ad30"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "starving_clock",
@@ -1512,7 +1595,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f96abec0dba4d7b08c2f4c58b525e702b349f7382579f613d2ed68da8b0a3590"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "curse_stasis_fracture",
@@ -1524,7 +1608,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4ceda02f54022080d949429ef11587652d418322dc739387716eae58e2da29ac"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "curse_thaw_debt",
@@ -1536,7 +1621,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f96abec0dba4d7b08c2f4c58b525e702b349f7382579f613d2ed68da8b0a3590"
+          "sha256": "4a67cf3c521ca123b6b0661e7dc863f19dcb308360382d42db344ca298cd709a",
+          "glyph_family": 8
         },
         {
           "id": "curse_blood_memory",
@@ -1548,7 +1634,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "605fde581487025e5bd3e90157f5feb0916a1445ca262cbe0ebf5b175f83ad30"
+          "sha256": "911dc018ad3be34b7e67bc9bbb00b07428a4754662a9367004d50f8a5677e75f",
+          "glyph_family": 5
         },
         {
           "id": "curse_erased_present",
@@ -1560,7 +1647,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "11aa20febffb42cc801812b249dbb052609867069c4bd541a56d97c7ce70a25d",
+          "glyph_family": 10
         },
         {
           "id": "curse_starved_horizon",
@@ -1572,7 +1660,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "66517693800c01c05ac8a4bdc1cc58e72b745f391af4d70cae69e242ede1dd10",
+          "glyph_family": 2
         },
         {
           "id": "curse_folded_hunger",
@@ -1584,7 +1673,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
+          "glyph_family": 4
         },
         {
           "id": "curse_glass_cadence",
@@ -1596,7 +1686,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "e4c7201fa74acddce0f81dae0806349977090093b12d3a3098536918e0d8a544",
+          "glyph_family": 1
         },
         {
           "id": "curse_burnout_clock",
@@ -1608,7 +1699,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "curse_brittle_pact",
@@ -1620,7 +1712,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "605fde581487025e5bd3e90157f5feb0916a1445ca262cbe0ebf5b175f83ad30"
+          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
+          "glyph_family": 9
         },
         {
           "id": "curse_empty_veins",
@@ -1632,7 +1725,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4ceda02f54022080d949429ef11587652d418322dc739387716eae58e2da29ac"
+          "sha256": "911dc018ad3be34b7e67bc9bbb00b07428a4754662a9367004d50f8a5677e75f",
+          "glyph_family": 5
         },
         {
           "id": "curse_narrow_counter",
@@ -1644,7 +1738,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
+          "glyph_family": 9
         },
         {
           "id": "curse_shattered_aegis",
@@ -1656,7 +1751,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "5142d1b7879b8b5e3eec549d3b19349d2c64d1479cc14953309b2b4ce181d3b9",
+          "glyph_family": 3
         },
         {
           "id": "curse_recoil_tax",
@@ -1668,7 +1764,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
+          "glyph_family": 4
         },
         {
           "id": "curse_empty_magazine",
@@ -1680,7 +1777,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
+          "glyph_family": 4
         },
         {
           "id": "curse_divided_self",
@@ -1692,7 +1790,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
+          "glyph_family": 9
         },
         {
           "id": "curse_phantom_attention",
@@ -1704,7 +1803,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "5142d1b7879b8b5e3eec549d3b19349d2c64d1479cc14953309b2b4ce181d3b9",
+          "glyph_family": 3
         },
         {
           "id": "curse_fickle_time",
@@ -1716,7 +1816,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "205761f57d0ce5ca9425e465dc9f34f97cd2e02b80e872d097875e30293a80c2"
+          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "glyph_family": 0
         },
         {
           "id": "curse_brittle_fortune",
@@ -1728,7 +1829,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c040dee6749727477b9f4e9a78b7a3e2f8822cc67d02cff331e17c7b6d78a1f4"
+          "sha256": "79ad8df6577cc1a7473f79ac41ad4e4c9cd152a406d962c7738456016a80f616",
+          "glyph_family": 6
         }
       ]
     },
@@ -1747,7 +1849,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "76763232f1192e568632abcb32fffe18d2b22ccffdee7f6ed7d2e8a1c6b7a526",
+          "glyph_family": 6
         },
         {
           "id": "tal_ruin_execute",
@@ -1759,7 +1862,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
+          "glyph_family": 7
         },
         {
           "id": "tal_steel_recover",
@@ -1771,7 +1875,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f7fe3ef8d399eead769a1f5dbd90f87869da728fafe8b37c6bcf9fdb312a9886"
+          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
+          "glyph_family": 7
         },
         {
           "id": "widened_guard",
@@ -1783,7 +1888,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6001d2536494b373f6d2d983b64b58af56d76c9efd2660d7cc77b66ce134997"
+          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
+          "glyph_family": 3
         },
         {
           "id": "fortress_core",
@@ -1795,7 +1901,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "081684bfcdb2d59fb914551147c78a457bbf2140f98145857ce0fdfa575c3ed7"
+          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
+          "glyph_family": 3
         },
         {
           "id": "temporal_rebuke",
@@ -1807,7 +1914,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a5a5e52e6de68c78a9ef1b57a6785f4c96652be8cfcf272d4597dd212c34e8bc"
+          "sha256": "86944cbe9188e7fda16409c0be31ba1971dc64c01d874135345f6cfc413af091",
+          "glyph_family": 0
         },
         {
           "id": "deep_debt",
@@ -1819,7 +1927,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "5f61231240442e256b91d8c0593d497827341b9665f73928d1f057f6640997c9",
+          "glyph_family": 10
         },
         {
           "id": "bounded_devour",
@@ -1831,7 +1940,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a5a5e52e6de68c78a9ef1b57a6785f4c96652be8cfcf272d4597dd212c34e8bc"
+          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
+          "glyph_family": 7
         },
         {
           "id": "risk_step",
@@ -1843,7 +1953,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6001d2536494b373f6d2d983b64b58af56d76c9efd2660d7cc77b66ce134997"
+          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
+          "glyph_family": 3
         },
         {
           "id": "resonant_plate",
@@ -1855,7 +1966,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f7fe3ef8d399eead769a1f5dbd90f87869da728fafe8b37c6bcf9fdb312a9886"
+          "sha256": "9d103dd7b8f245bb6a3627192fac6dcd48eb016c70e0a02da76926df4d00e16c",
+          "glyph_family": 8
         },
         {
           "id": "echo_forge",
@@ -1867,7 +1979,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "b6fb47799be3906e16c5d0572dce9e46d62cb529819c17d3a4dddfb8c2f40879",
+          "glyph_family": 5
         },
         {
           "id": "realm_collapse",
@@ -1879,7 +1992,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6001d2536494b373f6d2d983b64b58af56d76c9efd2660d7cc77b66ce134997"
+          "sha256": "76763232f1192e568632abcb32fffe18d2b22ccffdee7f6ed7d2e8a1c6b7a526",
+          "glyph_family": 6
         },
         {
           "id": "codex_margin",
@@ -1891,7 +2005,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "86944cbe9188e7fda16409c0be31ba1971dc64c01d874135345f6cfc413af091",
+          "glyph_family": 0
         },
         {
           "id": "efficient_inscription",
@@ -1903,7 +2018,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6001d2536494b373f6d2d983b64b58af56d76c9efd2660d7cc77b66ce134997"
+          "sha256": "a4265c1853fd3e7d0d9478846d00739ebd5c0b412bc2b937db69d71da9a280c7",
+          "glyph_family": 4
         },
         {
           "id": "dominion_cadence",
@@ -1915,7 +2031,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "59a7a0590c01c8a1d2a8c126e471bc5814f4410d0f870efeff13a74b1d57103a"
+          "sha256": "9d103dd7b8f245bb6a3627192fac6dcd48eb016c70e0a02da76926df4d00e16c",
+          "glyph_family": 8
         }
       ]
     },
@@ -1934,7 +2051,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "49048fe57e7f10797a39d8cd661b29d393e2bb3e58adc6a9ffea2ab3ed6801d0"
+          "sha256": "275f0db8da3e1c01f9ba511e412169eca417937f9806c084cc91e607411bec5b",
+          "glyph_family": 4
         },
         {
           "id": "daily_boss",
@@ -1946,7 +2064,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "98ea57fdfc798735f346a40d3e014a49bec0a92f897255a51592012a56b1cc57"
+          "sha256": "727f5f4b0da84a70afbd257a6c48a9b0698e35257fa9147f5497066e116f17eb",
+          "glyph_family": 11
         },
         {
           "id": "authored_challenges",
@@ -1958,7 +2077,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d8fe4d1d968a5d304b1c4e9b1322dad87143853f48c63ec2917b0e2ad2544ab9"
+          "sha256": "727f5f4b0da84a70afbd257a6c48a9b0698e35257fa9147f5497066e116f17eb",
+          "glyph_family": 11
         },
         {
           "id": "training",
@@ -1970,7 +2090,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d8fe4d1d968a5d304b1c4e9b1322dad87143853f48c63ec2917b0e2ad2544ab9"
+          "sha256": "275f0db8da3e1c01f9ba511e412169eca417937f9806c084cc91e607411bec5b",
+          "glyph_family": 4
         },
         {
           "id": "endless",
@@ -1982,7 +2103,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d753e8b4d29388ea6a9e0fc235b297530cb117fea1a0a2acc771daedd2e30dd9"
+          "sha256": "f74c1d8b4ceaee406348825e07fac3db14b538b42ccbe84ad092d926bfe24bd6",
+          "glyph_family": 9
         }
       ]
     },
@@ -2001,7 +2123,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f3790acb94904d367700ad660514adba3e1feca71b10ed637315827cdd4b5d20"
+          "sha256": "a190b05994519dda5fcf735265a2d06ca30d0aa95de4178f553e47119a546e5c"
         },
         {
           "id": "panel_active",
@@ -2013,7 +2135,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "166d2fa687fc02fa4bd3a9b86422dc2e89458da625ef230703d86b386d3a5db0"
+          "sha256": "c0f125775664b642319ec86c2d5de56c5b038a693581a2e2f5b0c5f248354262"
         },
         {
           "id": "panel_danger",
@@ -2025,7 +2147,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "13591a490c906c0db9bde8a32750c665795251b8990686f9676a5db5339ec5a4"
+          "sha256": "fe1c7541517ca7ae12eaacbe115207b2c35de88bdc84271de8653952ce734b1d"
         },
         {
           "id": "divider",
@@ -2037,7 +2159,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "cf18310de6b9d86872381297fcaa8b712227a332d96e3b3253ff397d232ceed1"
+          "sha256": "d900efded7cb5a0b67323fe9c5eca59ece2a7d53334bd1e27e9b6d81319e91a1"
         },
         {
           "id": "badge",
@@ -2049,7 +2171,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c69f1bea1457b59b02b2dda2da558d3163afff6aeb2af0992ebbdd2ed865a8e3"
+          "sha256": "2059df48ce910badc9711451c1d0663f6868ae6429cd351accf8dfca302c80f1"
         },
         {
           "id": "cursor",
@@ -2061,7 +2183,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a5bc572a148aa4ca137fafebd1ca8527734ceb8f405824aec48ec397f558779e"
+          "sha256": "fe14b8a448e59d9f6c71d423af4b62014f69126b0805769b0986d7dcc5d18c91"
         }
       ]
     },

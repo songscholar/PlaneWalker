@@ -72,6 +72,15 @@ def _canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
     return image, ImageDraw.Draw(image)
 
 
+def _frame_spark(draw: ImageDraw.ImageDraw, frame: int, color: tuple[int, int, int, int]) -> None:
+    """Add a four-step charge/spark cue so every strip has meaningful frames."""
+    for index in range(frame + 1):
+        x = 27 - index * 3
+        y = 5 + index * 2
+        draw.rectangle((x, y, x + 1, y + 1), fill=color)
+    draw.rectangle((4 + frame * 3, 27, 5 + frame * 3, 28), fill=color)
+
+
 def _outline(draw: ImageDraw.ImageDraw, points: list[tuple[int, int]], fill: tuple[int, int, int, int]) -> None:
     draw.polygon(points, fill=PALETTE["ink"])
     inset = [(x + (1 if x < 16 else -1), y + (1 if y < 16 else -1)) for x, y in points]
@@ -118,6 +127,7 @@ def weapon_frame(weapon: str, frame: int) -> Image.Image:
         draw.line([(13, 17), (19, 15)], fill=bone, width=2)
         draw.rectangle((5, 8 + pulse, 10, 12 + pulse), fill=PALETTE["time"])
         draw.rectangle((22, 19 - pulse, 27, 23 - pulse), fill=ember)
+    _frame_spark(draw, frame, PALETTE["time"])
     return image
 
 
@@ -147,6 +157,7 @@ def ability_frame(ability: str, frame: int) -> Image.Image:
         draw.line([(8, 16), (24, 16)], fill=time, width=2)
         draw.rectangle((13, 13 + pulse, 18, 18 + pulse), fill=bone)
         draw.rectangle((5, 6, 9, 9), fill=brass)
+    _frame_spark(draw, frame, PALETTE["brass"])
     return image
 
 
@@ -181,6 +192,7 @@ def effect_frame(effect: str, frame: int) -> Image.Image:
         draw.polygon([(3, 18), (12, 12), (18, 3), (20, 13), (29, 18), (20, 21), (14, 29), (12, 21)], fill=ink)
         draw.polygon([(7, 18), (13, 14), (17, 7), (18, 15), (25, 18), (18, 20), (14, 25), (13, 20)], fill=PALETTE["void"])
         draw.rectangle((14, 15, 18, 20), fill=time)
+    _frame_spark(draw, frame, PALETTE["bone"])
     return image
 
 
@@ -198,14 +210,37 @@ def _content_colors(category: str) -> tuple[tuple[int, int, int, int], tuple[int
     return PALETTE["stone"], PALETTE["patina"], PALETTE["bone"]
 
 
+_TOKEN_FAMILIES = (
+    (("clock", "tempo", "chronal", "time", "stasis", "accelerat", "rewind"), 0),
+    (("lens", "prism", "mirror", "focus", "draw"), 1),
+    (("blade", "sword", "cleav", "edge", "gauntlet"), 2),
+    (("anchor", "aegis", "guard", "fortress", "shield"), 3),
+    (("rift", "void", "abyss", "fold", "corridor", "snare"), 4),
+    (("echo", "history", "memory", "reservoir", "yesterday"), 5),
+    (("core", "heart", "battery", "reserve", "energy"), 6),
+    (("blood", "hunger", "siphon", "devour", "price"), 7),
+    (("crown", "dominion", "throne", "legion", "sovereign"), 8),
+    (("arrow", "ballistic", "rail", "shot", "pierc", "barrage"), 9),
+    (("fire", "ember", "burn", "overdrive", "redline", "flame"), 10),
+    (("bloom", "flower", "spore", "bramble", "root", "garden"), 11),
+)
+
+
+def glyph_family(category: str, asset_id: str) -> int:
+    lowered = asset_id.lower()
+    for tokens, family in _TOKEN_FAMILIES:
+        for token in tokens:
+            if token in lowered:
+                return family
+    import hashlib as _hashlib
+    return _hashlib.sha256((category + ":" + asset_id).encode("utf-8")).digest()[0] % len(_TOKEN_FAMILIES)
+
+
 def content_frame(category: str, asset_id: str, frame: int) -> Image.Image:
     """Render a stable semantic glyph; the id hash chooses a distinct silhouette."""
-    import hashlib as _hashlib
-
     image, draw = _canvas()
     primary, accent, highlight = _content_colors(category)
-    digest = _hashlib.sha256(asset_id.encode("utf-8")).digest()
-    shape = digest[0] % 5
+    shape = glyph_family(category, asset_id)
     wobble = (0, 1, 0, -1)[frame]
     draw.rectangle((3, 3, 28, 28), fill=PALETTE["ink"])
     draw.rectangle((5, 5, 26, 26), fill=PALETTE["stone"])
@@ -224,10 +259,40 @@ def content_frame(category: str, asset_id: str, frame: int) -> Image.Image:
     elif shape == 3:
         draw.polygon([(7, 12), (11, 8), (14, 11), (18, 7), (21, 11), (25, 9), (24, 22), (8, 22)], fill=primary)
         draw.rectangle((12, 14 + wobble, 20, 18 + wobble), fill=accent)
-    else:
+    elif shape == 4:
         draw.arc((7, 7, 25, 25), 20 + frame * 12, 320 + frame * 12, fill=primary, width=3)
         draw.rectangle((13, 13 + wobble, 19, 19 + wobble), fill=accent)
+    elif shape == 5:
+        draw.line([(8, 23), (22, 8)], fill=primary, width=5)
+        draw.line([(9, 24), (23, 10)], fill=accent, width=2)
+        draw.rectangle((7, 22, 13, 25), fill=highlight)
+    elif shape == 6:
+        draw.polygon([(16, 7), (24, 10), (22, 21), (16, 26), (10, 21), (8, 10)], fill=primary)
+        draw.rectangle((13, 12 + wobble, 19, 19 + wobble), fill=accent)
+        draw.rectangle((15, 14 + wobble, 17, 17 + wobble), fill=highlight)
+    elif shape == 7:
+        draw.polygon([(7, 16), (13, 8), (20, 11), (25, 16), (19, 24), (12, 22)], fill=primary)
+        draw.line([(7, 16), (25, 16)], fill=accent, width=2)
+        draw.rectangle((14, 13 + wobble, 18, 19 + wobble), fill=highlight)
+    elif shape == 8:
+        draw.polygon([(7, 12), (12, 8), (16, 12), (20, 8), (25, 12), (23, 22), (9, 22)], fill=primary)
+        draw.rectangle((11, 14 + wobble, 21, 18 + wobble), fill=accent)
+        draw.rectangle((14, 10, 18, 12), fill=highlight)
+    elif shape == 9:
+        draw.line([(6, 22), (24, 10)], fill=primary, width=3)
+        draw.polygon([(25, 10), (19, 9), (22, 15)], fill=accent)
+        draw.rectangle((8, 20, 13, 23), fill=highlight)
+        draw.rectangle((11, 17 + wobble, 13, 19 + wobble), fill=accent)
+    elif shape == 10:
+        draw.polygon([(8, 22), (13, 15), (12, 9), (18, 14), (24, 8), (21, 17), (25, 21), (16, 20)], fill=primary)
+        draw.rectangle((14, 15 + wobble, 19, 19 + wobble), fill=accent)
+        draw.rectangle((15, 12, 17, 14), fill=highlight)
+    else:
+        draw.line([(8, 22), (12, 12), (16, 22), (20, 12), (24, 22)], fill=primary, width=3)
+        draw.rectangle((11, 9 + wobble, 14, 12 + wobble), fill=accent)
+        draw.rectangle((19, 8 - wobble, 22, 11 - wobble), fill=highlight)
     draw.rectangle((6, 6, 8, 8), fill=highlight)
+    _frame_spark(draw, frame, highlight)
     return image
 
 
@@ -252,6 +317,7 @@ def ui_frame(asset_id: str, frame: int) -> Image.Image:
         border = time if asset_id == "panel_active" else PALETTE["danger"] if asset_id == "panel_danger" else edge
         draw.rectangle((7, 7, 24, 24), outline=border, width=2)
         draw.rectangle((10, 10, 21, 11), fill=brass if frame % 2 == 0 else border)
+    _frame_spark(draw, frame, brass)
     return image
 
 
@@ -350,6 +416,9 @@ def generate(destination: Path = OUTPUT) -> None:
         generated += _write_atlases(destination, category, ids, lambda asset_id, frame, family=category: content_frame(family, asset_id, frame))
     generated += _write_atlases(destination, "mode_art", MODE_ART, lambda asset_id, frame: content_frame("mode_art", asset_id, frame))
     generated += _write_atlases(destination, "final_ui_frames", UI_FRAMES, ui_frame)
+    for row in generated:
+        if row["kind"] in (*content_ids.keys(), "mode_art"):
+            row["glyph_family"] = glyph_family(str(row["kind"]), str(row["id"]))
 
     production_root = ROOT / "assets" / "production"
     existing: list[dict] = []

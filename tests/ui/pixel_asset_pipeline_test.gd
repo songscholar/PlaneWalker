@@ -48,6 +48,15 @@ func _run() -> void:
 				break
 		suite.assert_equal(found.get("status", ""), "generated", "%s content icons are generated" % batch_id)
 		suite.assert_true((found.get("assets", []) as Array).size() > 0, "%s content icon batch is non-empty" % batch_id)
+	var glyph_families: Dictionary = {}
+	for batch_id: String in CONTENT_BATCHES + ["mode_art"]:
+		for batch_value: Variant in inventory.get("batches", []):
+			if not batch_value is Dictionary or str(batch_value.get("id", "")) != batch_id:
+				continue
+			for asset_value: Variant in batch_value.get("assets", []):
+				if asset_value is Dictionary and asset_value.has("glyph_family"):
+					glyph_families[int(asset_value.glyph_family)] = true
+	suite.assert_true(glyph_families.size() >= 12, "content and mode icon batches expose twelve semantic glyph families")
 	var font_fallback: Dictionary = {}
 	for batch_value: Variant in inventory.get("batches", []):
 		if batch_value is Dictionary and str(batch_value.get("id", "")) == "font":
