@@ -1,6 +1,7 @@
 extends "res://tests/integration/ui/main_daily_boss_test.gd"
 
 const RESOLUTIONS := [Vector2i(640, 360), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(3440, 1440)]
+const Retirement := preload("res://tests/support/audio_playback_retirement.gd")
 const PAGES := {
 	"gateway": ["hub_council", "GatewayLoadout"],
 	"council": ["hub_council", "CouncilBranches"],
@@ -19,6 +20,7 @@ func _run() -> void:
 	_registry = Registry.new()
 	_registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
 	var capture := OS.get_cmdline_user_args().has("--hub-finish-screenshots")
+	var playback_refs: Array[WeakRef] = []
 	for locale: String in ["zh_CN", "en"]:
 		for scale: float in [1.0, 1.5]:
 			GameState.persistent.settings.locale = locale
@@ -63,6 +65,16 @@ func _run() -> void:
 							DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output.get_base_dir()))
 							_suite.assert_equal(pixels.save_png(output), OK, "dedicated Hub page capture retained")
 					hub.close_panel()
+				for deck: Node in main.get_node("MusicDirector").get_children():
+					if deck is AudioStreamPlayer and deck.playing and deck.get_stream_playback() != null:
+						playback_refs.append(weakref(deck.get_stream_playback()))
+				# Release the owned Main tree before its hosting viewport. Queueing only
+				# the viewport can leave deferred Hub callbacks alive at process exit.
+				if is_instance_valid(hub):
+					hub.hide_hub()
+				if is_instance_valid(main):
+					main.queue_free()
 				viewport.queue_free()
 				await _frames(3)
+	_suite.assert_true(await Retirement.await_release(get_tree(), playback_refs), "Hub layout teardown releases actual music playback before exit")
 	_suite.finish(get_tree())
