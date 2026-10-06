@@ -3,10 +3,14 @@ extends RefCounted
 
 const INVENTORY_PATH := "res://assets/production/ui/pixel_asset_inventory.json"
 const ROOT_PATH := "res://assets/production/ui/"
+const Events := preload("res://scripts/dungeon/dungeon_event_definition.gd")
 const REQUIRED_GENERATED := {
 	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
+	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
+	"event_art": Events.EVENT_IDS,
+	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
@@ -65,8 +69,9 @@ static func validate() -> Dictionary:
 			var digest := FileAccess.get_sha256(path)
 			if digest != str(value.get("sha256", "")):
 				errors.append("asset hash mismatch: %s" % path)
-			if int(value.get("frame_width", 0)) != 32 or int(value.get("frame_height", 0)) != 32:
-				errors.append("asset frame size is not 32x32: %s" % path)
+			var expected_size := Vector2i(96, 64) if batch_id == "event_art" else Vector2i(32, 32)
+			if int(value.get("frame_width", 0)) != expected_size.x or int(value.get("frame_height", 0)) != expected_size.y or int(value.get("frame_count", 0)) != 4:
+				errors.append("asset frame dimensions or count mismatch: %s" % path)
 	for batch_id: String in REQUIRED_CONTENT_BATCHES:
 		var found := false
 		for batch_value: Variant in inventory.get("batches", []):

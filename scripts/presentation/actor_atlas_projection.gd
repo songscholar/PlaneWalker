@@ -69,7 +69,7 @@ func present(state: StringName, facing: Vector2, clock: float, flash: bool, redu
 	match normalized:
 		"dash": normalized = "move"
 		"hit": normalized = "hurt"
-		"time_stop", "time_rewind", "windup", "heal": normalized = "cast"
+		"time_stop", "time_rewind", "time_accelerate", "time_rift", "windup", "heal": normalized = "cast"
 		"recovery": normalized = "idle"
 	if normalized not in STATES:
 		return false

@@ -5,10 +5,12 @@ signal cue_requested(cue_id: StringName, world_position: Vector2, intensity: flo
 
 const AfterimageScript := preload("res://scripts/presentation/pixel_proxy_afterimage.gd")
 const ActorAtlasScript := preload("res://scripts/presentation/actor_atlas_projection.gd")
+const EffectAtlasScript := preload("res://scripts/presentation/player_effect_atlas_projection.gd")
 const PIXEL_UNIT := 2
 const SCREEN_PIXEL_UNIT := 2.0
 const FLASH_BUDGET_WINDOW_SECONDS := 1.0
 const MAX_FLASH_EVENTS_PER_WINDOW := 3
+const NON_ATTACK_VFX_IDS := ["sword_guard_flash", "bow_focus_line", "gun_reload_marker", "gun_time_load_tint", "staff_element_orb"]
 const ACTIVE_ITEM_HANDLER_IDS: Array[StringName] = [
 	&"absolute_zero",
 	&"paradox_beacon",
@@ -80,6 +82,8 @@ const ACTION_DURATIONS := {
 	&"cast": 0.28,
 	&"time_stop": 0.34,
 	&"time_rewind": 0.40,
+	&"time_accelerate": 0.34,
+	&"time_rift": 0.28,
 	&"hit": 0.12,
 	&"heal": 0.26,
 	&"death": 0.45,
@@ -202,6 +206,10 @@ var _active_item_cue_id: String = ""
 var _active_item_cue_kind: String = ""
 var _active_item_cue_remaining: float = 0.0
 var _actor_atlas: Sprite2D
+var _effect_atlas: Sprite2D
+var _effect_clock := 0.0
+var _action_serial := 0
+var _action_duration := 0.0
 var _cosmetic_id := ""
 var _challenge_rewards: Dictionary = {}
 
@@ -244,6 +252,7 @@ func bind_actor(actor: Node2D) -> bool:
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
 	_sync_actor_atlas()
+	_sync_effect_atlas()
 	queue_redraw()
 	return true
 
@@ -260,11 +269,14 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 	elif _state != &"death":
 		_state = normalized
 		_action_remaining = float(ACTION_DURATIONS.get(normalized, 0.2)) if duration <= 0.0 else duration
+	_action_serial += 1
+	_action_duration = _action_remaining
 	if normalized == &"hit" and _hit_flash_enabled:
 		_request_hit_flash()
 	_refresh_player_weapon_presentation()
 	_update_presentation_facing()
 	_apply_pixel_transform()
+	_sync_effect_atlas()
 	queue_redraw()
 
 
@@ -354,6 +366,7 @@ func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void
 	_reduced_motion = reduced_motion
 	if not _hit_flash_enabled:
 		_flash_remaining = 0.0
+	_sync_effect_atlas()
 	queue_redraw()
 
 
@@ -427,6 +440,7 @@ func get_snapshot_for_test() -> Dictionary:
 		"boss_luminance": _boss_luminance,
 		"afterimage_count": _afterimage_count,
 		"actor_atlas": _actor_atlas.snapshot() if _actor_atlas != null else {},
+		"effect_atlas": _effect_atlas.snapshot() if _effect_atlas != null else {},
 		"challenge_rewards": _challenge_rewards.duplicate(true),
 	}
 
@@ -439,6 +453,7 @@ func _process(delta: float) -> void:
 
 func _advance_animation(delta: float) -> void:
 	_advance_flash_budget(delta)
+	_effect_clock += maxf(0.0, delta)
 	if not _reduced_motion:
 		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
@@ -464,6 +479,7 @@ func _advance_animation(delta: float) -> void:
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
 	_sync_actor_atlas()
+	_sync_effect_atlas()
 	queue_redraw()
 
 
@@ -480,6 +496,46 @@ func _sync_actor_atlas() -> void:
 		return
 	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
 	_refresh_challenge_rewards()
+
+
+func _sync_effect_atlas() -> void:
+	if _role != "player":
+		return
+	if _effect_atlas == null:
+		_effect_atlas = EffectAtlasScript.new()
+		_effect_atlas.name = "ProductionEffectAtlas"
+		add_child(_effect_atlas)
+		_effect_atlas.set_as_top_level(true)
+		_effect_atlas.z_index = z_index + 1
+	var effect_id := ""
+	var marker := "action:%d" % _action_serial
+	var duration := _action_duration
+	var offset := Vector2.ZERO
+	var facing := Vector2.RIGHT
+	if _state != &"death" and _action_remaining > 0.0 and _state in [&"cast", &"time_stop", &"time_rewind", &"time_accelerate", &"time_rift"]:
+		effect_id = "rift_bloom" if _state in [&"cast", &"time_rift"] else "time_ring"
+	elif _state != &"death" and _weapon_snapshot_available and (_weapon_phase == "ACTIVE" or _presentation_cue_remaining > 0.0):
+		if _presentation_cue_remaining > 0.0 and _presentation_vfx_id in NON_ATTACK_VFX_IDS:
+			_effect_atlas.clear()
+			return
+		match _weapon_id:
+			"sword", "gauntlets": effect_id = "weapon_arc"
+			"bow": effect_id = "arrow_trail"
+			"gun": effect_id = "muzzle_flash" if _hit_flash_enabled else ""
+			"staff": effect_id = "spell_burst"
+		marker = "weapon:%s:%s:%s:%d" % [_weapon_id, _weapon_action_id, str(_player_weapon_snapshot.get("token", "")), _action_serial]
+		duration = _weapon_cue_duration()
+		facing = _attack_direction
+		offset = facing * (22.0 if _weapon_id in ["bow", "gun", "staff"] else 6.0)
+	if effect_id.is_empty():
+		_effect_atlas.clear()
+		return
+	# A separate canvas transform avoids inherited squash distorting effect pixels.
+	var canvas := get_viewport().get_canvas_transform() if is_inside_tree() else Transform2D.IDENTITY
+	var origin := (canvas * global_position + offset).snapped(Vector2(2.0, 2.0))
+	var screen_pose := Transform2D(facing.angle(), Vector2(2.0, 2.0), 0.0, origin)
+	_effect_atlas.global_transform = canvas.affine_inverse() * screen_pose
+	_effect_atlas.present(effect_id, marker, _effect_clock, maxf(0.01, duration), _reduced_motion)
 
 
 func _refresh_challenge_rewards() -> void:
@@ -943,7 +999,7 @@ func _apply_pixel_transform() -> void:
 			offset = _facing * (2.0 if _reduced_motion else 4.0)
 			if not _reduced_motion:
 				target_scale = Vector2(1.16, 0.86) if absf(_facing.x) > 0.0 else Vector2(0.86, 1.16)
-		&"cast", &"time_stop", &"time_rewind":
+		&"cast", &"time_stop", &"time_rewind", &"time_accelerate", &"time_rift":
 			offset.y = -2.0
 			target_scale = Vector2(0.96, 1.08)
 		&"windup":
@@ -993,7 +1049,7 @@ func _draw() -> void:
 			_draw_boss(primary, secondary, accent)
 		_:
 			_draw_generic(primary, secondary, accent)
-	if _state in [&"cast", &"time_stop", &"time_rewind"]:
+	if _state in [&"cast", &"time_stop", &"time_rewind", &"time_accelerate", &"time_rift"]:
 		_draw_time_cast(accent)
 	if _state == &"windup":
 		_draw_danger_crown(_palette["danger"])

@@ -2,11 +2,15 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Catalog := preload("res://scripts/presentation/ui_art_catalog.gd")
+const Events := preload("res://scripts/dungeon/dungeon_event_definition.gd")
 
 const REQUIRED := {
 	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
+	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
+	"event_art": Events.EVENT_IDS,
+	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
@@ -35,8 +39,11 @@ func _run() -> void:
 			suite.assert_true(image != null and not image.is_empty(), "%s/%s raster loads" % [batch_id, asset_id])
 			if image == null or image.is_empty():
 				continue
-			suite.assert_equal(image.get_width(), 128, "%s/%s has four 32px frames" % [batch_id, asset_id])
-			suite.assert_equal(image.get_height(), 32, "%s/%s keeps the 32px frame height" % [batch_id, asset_id])
+			var expected_size := Vector2i(96, 64) if batch_id == "event_art" else Vector2i(32, 32)
+			suite.assert_equal(image.get_width(), expected_size.x * 4, "%s/%s has four authored frames" % [batch_id, asset_id])
+			suite.assert_equal(image.get_height(), expected_size.y, "%s/%s keeps the authored frame height" % [batch_id, asset_id])
+			var imported := load(path) as Texture2D
+			suite.assert_true(imported != null and imported.get_size() == Vector2(image.get_size()), "%s/%s imports exact raster dimensions" % [batch_id, asset_id])
 			suite.assert_equal(FileAccess.get_sha256(path), str(row.get("sha256", "")), "%s/%s hash is stable" % [batch_id, asset_id])
 		var missing := Catalog.asset(StringName(batch_id), &"missing")
 		suite.assert_true(missing.is_empty(), "%s rejects undeclared asset ids" % batch_id)

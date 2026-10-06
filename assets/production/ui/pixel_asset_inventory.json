@@ -14,7 +14,11 @@
     "brass": "#e5bd69",
     "danger": "#f07065",
     "ember": "#df9b65",
-    "void": "#b897d7"
+    "void": "#b897d7",
+    "time_shadow": "#2c8da0",
+    "brass_shadow": "#a4773e",
+    "void_shadow": "#76579a",
+    "danger_shadow": "#a9464f"
   },
   "batches": [
     {
@@ -437,7 +441,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "380a1cbdaabb7a93d914055b81b0985784f49dfcdba342bb5064a33214a0fa66"
+          "sha256": "4f0b7e2b0a0af72c529388fd07c1929b64ff5d5118763d3f6fe03224b04bc0e5"
         },
         {
           "id": "bow",
@@ -449,7 +453,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "282541268af508e687ae7d0f10bb2c1133067dfea4fcd583a53e24fb24f9a3e5"
+          "sha256": "1fa23bb7a32c3f787487e296ad16ccff9ac7d0702acb7a52065f45f4fefb7698"
         },
         {
           "id": "gun",
@@ -461,7 +465,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ff0c4d8cdab71cc150517fde4adfbbbdf281e8ef7a4f32babaca9011e49f8265"
+          "sha256": "a567f6ba0b33f4d1e29717f8e322cb20318fa328bfea2d4a7d27660d3fa7a0d0"
         },
         {
           "id": "staff",
@@ -473,7 +477,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d08a621b4b5a61d1b23b679e73033a764ed2b972e4f3b21a6e63976c205256e4"
+          "sha256": "e1759d30ee92944516550c4fb6493bcb6e66a0fcabdd97a329d72cd91ae345bd"
         },
         {
           "id": "gauntlets",
@@ -485,7 +489,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "29938d8e17b9cb9d428006296cbac5e9268cc09259138341487729bf05a5ed6a"
+          "sha256": "7c3def63805c84647e00936e34110eea08fc5edc281ded0dfeb7efe558489fb6"
         }
       ]
     },
@@ -559,7 +563,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "1c9c14fc9d77d405c7bf9f37651118ecd54718d89a722a2b44c9345f6084b324"
+          "sha256": "b35181777b8291063fdc43ee6986e5f54fe7b70fed516b28042e612a77c08439"
         },
         {
           "id": "arrow_trail",
@@ -571,7 +575,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "1c7a50555907991a70b43cb487b6f176035a948d3d86e07b93ba1655626755be"
+          "sha256": "2eb2374b47fc707eec8a41f93695c8f47baf9c4bd5e007fc9ee0a8f680e8e0ef"
         },
         {
           "id": "muzzle_flash",
@@ -583,7 +587,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9eb4334cdc5cbb2fe9cdc5a85bd0f194df72393bd817bf7476dafaf5f692cc6b"
+          "sha256": "4392bc053458d82bc3ce1933a5481a2d6f0ce8683a539e136865804c4012cc22"
         },
         {
           "id": "spell_burst",
@@ -595,7 +599,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c7b3d81cb2509c45848496bc29f1431f2411737c8eb6a964c9f4dbc7cfcfe05e"
+          "sha256": "26432f6333ab43255bad21437d4532a3a4ce9fbec94aeceda64c479a3f7f021a"
         },
         {
           "id": "time_ring",
@@ -607,7 +611,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2465d2bd06b4f3ab358b58b4c6b6c934c5c6c6fc2c0c971f326fdb80d6b29b1a"
+          "sha256": "de184bd0867bad7cd7bce5ff04c91e03d3362a4c5e397d4e617effc697cb84c2"
         },
         {
           "id": "rift_bloom",
@@ -619,7 +623,448 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "951a9e0b1dec9a1ad50977a75773e9571aa951008cab0cf203ddb6ad9f967a84"
+          "sha256": "946d518c5c026d06acb67cf4c4973e69385b5b6b9e504144bd0a7e66e92298ef"
+        }
+      ]
+    },
+    {
+      "id": "room_types",
+      "status": "generated",
+      "scope": "revealed room types and a distinct unknown glyph",
+      "assets": [
+        {
+          "id": "entry",
+          "path": "room_types/entry.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "f60aa488b704871c440bc1d7dc24ebe94ba93eef26de79c5725a71934f087ec8"
+        },
+        {
+          "id": "unknown",
+          "path": "room_types/unknown.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "2504ee80edde1a8fcca31f6f31bcb12414198f530ff73aea79d5e2fac107e6a5"
+        },
+        {
+          "id": "combat",
+          "path": "room_types/combat.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "40564cfec4c337e31152515073fd9df56b03de00bd0641255f5d7b1a7edcdaf2"
+        },
+        {
+          "id": "elite",
+          "path": "room_types/elite.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "674607c655019156e1b18950d2fc0112ca5ef54db409605158b2ba926a2580d8"
+        },
+        {
+          "id": "treasure",
+          "path": "room_types/treasure.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7a5b715aa665d1a618a4bfa40a8e9e80d92f3255780f469efa69d31e65347825"
+        },
+        {
+          "id": "shop",
+          "path": "room_types/shop.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "e9e368722d607253410db0d0287cd28695b1fd03829baee3e72cf689e77d0619"
+        },
+        {
+          "id": "event",
+          "path": "room_types/event.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "8ecc70e295fd95c50b2eabdbd6caa83e9df88a1383d02464a7672b1e74e2415c"
+        },
+        {
+          "id": "boss",
+          "path": "room_types/boss.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "e7c8d838582f025aa2e2bc82a3e60bfbffeb6eaab52a340b1ba26e7dc2c4f692"
+        },
+        {
+          "id": "rest",
+          "path": "room_types/rest.png",
+          "kind": "room_types",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "9cb0e18b63843bddf408e21500c9121456e186fc71d7446e0ed5dcb04ee9e09a"
+        }
+      ]
+    },
+    {
+      "id": "event_art",
+      "status": "generated",
+      "scope": "eighteen authored event vignettes",
+      "assets": [
+        {
+          "id": "event_chronal_altar",
+          "path": "event_art/event_chronal_altar.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "9f2711db52951b8bfad35c5db158aef8959102accf9efa78213a0110b5f43bc3"
+        },
+        {
+          "id": "event_trapped_traveler",
+          "path": "event_art/event_trapped_traveler.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "1ae0d47296f9121520e390200bdd1161b31a9d06ae8916aa28bd89fba56a8ac1"
+        },
+        {
+          "id": "event_cursed_pool",
+          "path": "event_art/event_cursed_pool.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "cba9059e94d000888e6c1808fc947d3348e4fd9573318c6b20a4e4659e309f45"
+        },
+        {
+          "id": "event_smiths_legacy",
+          "path": "event_art/event_smiths_legacy.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "8ac07743a519f7c5efb6f7329c2d03b1b7859a34b5c9703f538bbf9e282cb317"
+        },
+        {
+          "id": "event_memory_mirror",
+          "path": "event_art/event_memory_mirror.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "00d3214a0660df039b6a1027e2832c60dde8a8ed5be888cca70b27409fc67ef1"
+        },
+        {
+          "id": "event_planar_merchant",
+          "path": "event_art/event_planar_merchant.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "0e3348f82116c8fab64630e601f522d104bcc597d5b1c1eaefff13df16811e73"
+        },
+        {
+          "id": "event_void_rift",
+          "path": "event_art/event_void_rift.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7d64dee6c684a93f962476e54ec5b0f9ef3b97208d632860a1bb9085a5cf7ec6"
+        },
+        {
+          "id": "event_sleeping_guardian",
+          "path": "event_art/event_sleeping_guardian.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7b633226ea0e4e7ccc2b21593235fa4c59b79791dcb2550105928c31fbc4d37f"
+        },
+        {
+          "id": "event_twisted_well",
+          "path": "event_art/event_twisted_well.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "545aeb5baac499f6b5badd645a37b9d0e7be1344b9841eafa2e43c402e8a0893"
+        },
+        {
+          "id": "event_soul_contract",
+          "path": "event_art/event_soul_contract.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7d66aca239d520326cc4b48504bd3f23c287a807cfa9fd1d948fc4b6b5396145"
+        },
+        {
+          "id": "event_time_paradox",
+          "path": "event_art/event_time_paradox.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "de04ed1aefd0e89972c46477f83153f07c818a4a4294a6ed23f0580df11cca5b"
+        },
+        {
+          "id": "event_sacrificial_altar",
+          "path": "event_art/event_sacrificial_altar.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "1fa943d3121250aa68478ee8f9ea2f295b2a7a4b89a90731b72be69c12bf84d3"
+        },
+        {
+          "id": "event_lost_journal",
+          "path": "event_art/event_lost_journal.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7a1b09177436909c4b2b8feab6912b163d062260c98095119a06e151134b015b"
+        },
+        {
+          "id": "event_rift_garden",
+          "path": "event_art/event_rift_garden.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "063cfc80294fbf271b996b0ab0bfe21a645a0210a9904a749ce8919c337285d3"
+        },
+        {
+          "id": "event_final_choice",
+          "path": "event_art/event_final_choice.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "9d2abfc492d454b27125aab753fd2f242fd4bf7caa10bd76dae110195ea6f91e"
+        },
+        {
+          "id": "event_void_whispers",
+          "path": "event_art/event_void_whispers.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "869951fc92b50b986572af0318bcfa76b5c4f42d1e2ee408af9a635387f04e08"
+        },
+        {
+          "id": "event_perfect_rewind",
+          "path": "event_art/event_perfect_rewind.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "6dbb8dcfd8c667560ae3c485cb242db67e35ccb03eb3fd34623a92a623530e44"
+        },
+        {
+          "id": "event_old_reunion",
+          "path": "event_art/event_old_reunion.png",
+          "kind": "event_art",
+          "width": 384,
+          "height": 64,
+          "frame_width": 96,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "10c97293be96f66cfc0ebb33bbdb97b7cd85f420b00a105db665281f63d686c8"
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "status": "generated",
+      "scope": "neutral command symbols",
+      "assets": [
+        {
+          "id": "decline_contract",
+          "path": "controls/decline_contract.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "add4d570b959990de2cd5559ecbecd122154f049ac6d929f9e657bef375b4a7f"
+        },
+        {
+          "id": "play",
+          "path": "controls/play.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "c9a4bebe83407f84e93fa8104a1c565b59120822f6654d153c4f2a0867c86225"
+        },
+        {
+          "id": "pause",
+          "path": "controls/pause.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "24eb501751a1e401037bc1fb6061252b56d114f98a3d4d9cab6f6d042ed12a41"
+        },
+        {
+          "id": "copy",
+          "path": "controls/copy.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "bc686415cc742220759ad3ad66510dea3751fc9b6bc25022661d1c8e2fecdedc"
+        },
+        {
+          "id": "paste",
+          "path": "controls/paste.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "d37bfa7c3f34f27971e6f1efc5e787edf370ef828c93c9f7480f107893a0ec29"
+        },
+        {
+          "id": "export",
+          "path": "controls/export.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "c615b078d70174712327412857d2408ebc5773e7f259fb0248a112d16efff6f9"
+        },
+        {
+          "id": "delete",
+          "path": "controls/delete.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "080ba091be860598e3909b5b2f3155e0f1a654841ed0786e59e45808671a94f2"
+        },
+        {
+          "id": "back",
+          "path": "controls/back.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "53153e646876cc3366cf23e0597433ad05440a8b6bfeacc43d3dd03eca7a5b42"
         }
       ]
     },
@@ -638,8 +1083,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
-          "glyph_family": 10
+          "sha256": "3748f4eb8adabd784284c24b18ca28a4357bc38eb803c45600f9dbd7251c7c0b",
+          "glyph_family": 0
         },
         {
           "id": "stasis_lens",
@@ -651,8 +1096,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "ae1040963e1deba22f55bc756fa30a6594719e9b3ec4c1a9843f9cadd6d1b157",
+          "glyph_family": 1
         },
         {
           "id": "brittle_clock",
@@ -664,7 +1109,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
+          "sha256": "c4c35528598e9daf09e0650251fa9bdd83bbd15dbdfd98d866fe5069c9916d5a",
           "glyph_family": 0
         },
         {
@@ -677,7 +1122,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "sha256": "8a028d0a4283435bde24f844ab53358f65c0492fd6e0514026b1353b8c6291ea",
           "glyph_family": 1
         },
         {
@@ -690,8 +1135,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "dd99e7e8d707f3fc2bbae479ffc0d227c0915243e69c76430c20298e46ba4325",
-          "glyph_family": 11
+          "sha256": "4e36f5a1e43010ca71e2e5f70ba9916dcb5337cf65bf831629ed1623e97105a4",
+          "glyph_family": 5
         },
         {
           "id": "absolute_zero_device",
@@ -703,8 +1148,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e010643d8326472c251f5fa21f0a39a5c4fadb1444fce84f75ff938b479209b7",
-          "glyph_family": 7
+          "sha256": "042733301c3a404e8369a996c8ebef1eae053481476f33455fb6bbc57408ab09",
+          "glyph_family": 0
         },
         {
           "id": "rewind_echo",
@@ -716,8 +1161,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "d8a59efcbcfc68af31f499a562958b6c7bbc6c9f29806bedba6976ce4d5b652a",
+          "glyph_family": 5
         },
         {
           "id": "anchor_thread",
@@ -729,7 +1174,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "sha256": "f433477023d134c92789fb8c8ce13f17df4d4ee41667d6f178025b5efc6cdc2a",
           "glyph_family": 3
         },
         {
@@ -742,7 +1187,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "d93db61646458586d9a5e2843c0261071de2d78233d346a8ff0513d4fade015d",
           "glyph_family": 2
         },
         {
@@ -755,7 +1200,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "bb6cc606f8d9b64f802434f9799dd8a92e0b6ff65d2ab05ca76d2a33bf2b3cc2",
+          "sha256": "6b9aa3c3339291e62c8bd48df532690f235be734b154baec1fa36cc476bafcfe",
           "glyph_family": 5
         },
         {
@@ -768,7 +1213,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "sha256": "97f0d7866c3f45bab1969889e2c0d95d8d9b94939048506ffd04cf38240e0f7e",
           "glyph_family": 1
         },
         {
@@ -781,8 +1226,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
-          "glyph_family": 10
+          "sha256": "a485d76da1f2ed23e8ff46a645ddca5608b59cef2d17e4b8812c9e580488ced0",
+          "glyph_family": 0
         },
         {
           "id": "rift_engine",
@@ -794,7 +1239,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "d7ed1851b72c4cf874ef2d5ced80db45f25c0d022acb413d0559fdd2facb29af",
           "glyph_family": 4
         },
         {
@@ -807,7 +1252,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "sha256": "eee150518f118a0815afbfb1e7fae753546f1e37dd36ff3c5fbab9adfd8fb995",
           "glyph_family": 3
         },
         {
@@ -820,7 +1265,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "49e209265b1d36f22636fcca35fbda4c04a488f420024dd60732ed2e5c1c3602",
           "glyph_family": 4
         },
         {
@@ -833,7 +1278,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "45803cb2f6f8ece70e3e7f849828618fb3447b88078dffcb039dbed6d818d5ef",
           "glyph_family": 4
         },
         {
@@ -846,7 +1291,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "e0668aa3d382a104a0f1c0e4fc0fbc185b0ed9873930f01aef6a8932833ff874",
           "glyph_family": 4
         },
         {
@@ -859,7 +1304,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "7acf366ef70ba77b8a03ea09f159e2cb5115e6661fe1d12c0b3df317b4af7af6",
           "glyph_family": 4
         },
         {
@@ -872,8 +1317,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "05332239b0c36fe93a0659337a21825e7312086d8784fbc207303e4a58638598",
+          "glyph_family": 2
         },
         {
           "id": "cadence_core",
@@ -885,7 +1330,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "sha256": "f205064a4c7e3e3c717e5618bea907e6e4ead21445dcebc8ded94846b87326b9",
           "glyph_family": 6
         },
         {
@@ -898,7 +1343,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "sha256": "78e0b6adc87e13532fbca8d05f21ff2316ce2f91aace0f7f9b8e6fe0c28b5a4c",
           "glyph_family": 6
         },
         {
@@ -911,8 +1356,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
-          "glyph_family": 6
+          "sha256": "54bd0027ce7d71767a6b6b85f3febfa0dfdd245926c801823c054fd188fc8e31",
+          "glyph_family": 0
         },
         {
           "id": "efficient_overdrive",
@@ -924,7 +1369,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "sha256": "f99e63da4d2a752ca1b346a38519ab7b3315385b6d79e913ad235eee05d6d954",
           "glyph_family": 10
         },
         {
@@ -937,7 +1382,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7e1abeb77ef49587a6953189a5acd1527d1e843a101235fbd90419068020b5db",
+          "sha256": "198140ffe4e966d7b29e4d72643baabd5d9e80a5734878ea88f37ba99d70509f",
           "glyph_family": 10
         },
         {
@@ -950,7 +1395,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "c27b4b1b9c1e832d2e8b0f29d7023a86de514f3c34567531899272aa7a15d040",
           "glyph_family": 4
         },
         {
@@ -963,7 +1408,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "6ba5686ab8eac9f33aab21e2bc0f316f842ad2073d054769fd51650ea6a0847c",
           "glyph_family": 4
         },
         {
@@ -976,7 +1421,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "cad27e6f375553c3e50a4bd4301e3e1535d0806ea140e0a86e8150d73316ffae",
           "glyph_family": 2
         },
         {
@@ -989,8 +1434,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
-          "glyph_family": 4
+          "sha256": "98cef321e3dd00fce4211b238f23c90a66445f8e3c66f802f34e0e1f7ee6ce05",
+          "glyph_family": 7
         },
         {
           "id": "blood_price_relic",
@@ -1002,7 +1447,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e010643d8326472c251f5fa21f0a39a5c4fadb1444fce84f75ff938b479209b7",
+          "sha256": "a5d45743c4a664eb7d5f4c7fe578132e8a07c0632a67f50fc2d4e53cfce9c524",
           "glyph_family": 7
         },
         {
@@ -1015,7 +1460,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "7746109003bccd5b0620065ec63b6c8622a75cd267664fce6d8c3e004daf3e28",
           "glyph_family": 2
         },
         {
@@ -1028,7 +1473,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "sha256": "027f1356e44e1b651eb4b47639d2754c791e09962fe6e46234fb37ff1940e8ce",
           "glyph_family": 3
         },
         {
@@ -1041,7 +1486,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "sha256": "0ce6b644dfbf9890be9ede406cbd4263a218b8679c6a57bfa1874d553237c6d9",
           "glyph_family": 6
         },
         {
@@ -1054,7 +1499,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "7243fa99f5f7b8156a40d0549538c88c189f91b980fc185b901e64531934d476",
           "glyph_family": 2
         },
         {
@@ -1067,7 +1512,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "sha256": "de94210170e3007d115b82f347971bc55a1e878147bdb8b443dbcc10d17f15ba",
           "glyph_family": 3
         },
         {
@@ -1080,8 +1525,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
-          "glyph_family": 1
+          "sha256": "ba9636146de094ead470e26725b44cc5111da2ec4ea232804beca263faf89a6a",
+          "glyph_family": 9
         },
         {
           "id": "tempo_barrage",
@@ -1093,8 +1538,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "fbe95010eda613f41e14d3562972e4d7acba4d71cf5ca942df3035a781f60dea",
+          "glyph_family": 9
         },
         {
           "id": "focused_draw",
@@ -1106,8 +1551,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
-          "glyph_family": 1
+          "sha256": "1ceb5e51a48df1cb33bf6f41818f8d5d53dc5dcd630583ce0cd438a834e7d456",
+          "glyph_family": 9
         },
         {
           "id": "ricochet_matrix",
@@ -1119,8 +1564,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "425d53e1e4b45f906aade6e8cf5fc90b172a3d4abdca64511bb559925acf11c1",
-          "glyph_family": 9
+          "sha256": "200eff1e81e646181eb23f5615e0de9983aca925e9b37c6e84a38203d403251b",
+          "glyph_family": 2
         },
         {
           "id": "railshot_module",
@@ -1132,7 +1577,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "425d53e1e4b45f906aade6e8cf5fc90b172a3d4abdca64511bb559925acf11c1",
+          "sha256": "e9fa1ff19a2a7abacfb95222c310cf574aff5244cafd99892580f271b41a867a",
           "glyph_family": 9
         },
         {
@@ -1145,7 +1590,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "sha256": "9d352b3d7fa2a4e12a58c67cfa95d8d182eb77e5fe0bef5e2072ebd3f5f267fa",
           "glyph_family": 1
         },
         {
@@ -1158,7 +1603,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "813ece6eb7f65b74392050020171d5cbab22f67a09930b83f52c1242f2d41d63",
+          "sha256": "1aa0cf763ba41750085afeb61f25d949a77f94371e02cf117b955dee15de84d4",
           "glyph_family": 1
         },
         {
@@ -1171,7 +1616,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "2cfe9c5891c37b0395b18ed58370a770f73752448b8b72bd4f3559f13fa67d81",
+          "sha256": "4c390431f9dae0df0d61baaadabe4dde3edd5e207871668c05d0737b5c75c015",
           "glyph_family": 6
         },
         {
@@ -1184,7 +1629,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "73902f5d89f3237fff1038fa977a43a036ce8cb5f1474bee0c71ebc5246fc160",
+          "sha256": "bea74651e9db24d00c4a64d777a967b917b95c0841f2ac04b009b61e50277ff1",
           "glyph_family": 8
         },
         {
@@ -1197,7 +1642,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "bb6cc606f8d9b64f802434f9799dd8a92e0b6ff65d2ab05ca76d2a33bf2b3cc2",
+          "sha256": "b9735a6fb2cfda74c59e1d4bf5ccf60e9bf6bcd48b01fcf5936d1249b1e2e602",
           "glyph_family": 5
         },
         {
@@ -1210,8 +1655,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "482402af1707e6239a6cb2f5439cb68fb9257544bd2276196fafe57b7d1a805e",
+          "glyph_family": 6
         },
         {
           "id": "quickened_blade",
@@ -1223,7 +1668,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "a6d31b5c57ea85783b96fdc2212d9ddee73090eaa7e5d43333951fb64fc5523e",
           "glyph_family": 2
         },
         {
@@ -1236,8 +1681,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ddd30b26c00b4602182e0bf47c9cc1d9ab9a07a06cef56f606c9671763f80947",
-          "glyph_family": 0
+          "sha256": "77e8ef48a428dd894129c56c55ffe3c901bce7944f5e5ef55713cac0fa991e7a",
+          "glyph_family": 7
         },
         {
           "id": "rift_current",
@@ -1249,7 +1694,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a2d7b5a98a9f8ef3b8d6f89e9178d412d13bd16c7092da74cc50278ee713d804",
+          "sha256": "8dadb6e5bea941e76e8822a8e8154f656b555699171085c5bf3e4cba66b18c65",
           "glyph_family": 4
         },
         {
@@ -1262,7 +1707,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e7226fd44d7336cdd35c42ae14283bd989bb28ed481f5ea3cde44ba5488330f9",
+          "sha256": "a8c7ea057e48b72fe4af99ddc296a75e9d9bbf6c898f07e4348a742760de8bad",
           "glyph_family": 2
         },
         {
@@ -1275,7 +1720,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "c6fe49ebf009fc526d1ff9af3ab2912e56c9b325f816c36323c28fc27796bbfc",
+          "sha256": "dc45dff0a9ba0a229d179b711ac2663878e65f14d2163a20effb8f411543e16d",
           "glyph_family": 3
         }
       ]
@@ -1295,7 +1740,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "sha256": "f690e848da6881576baf58cc3b75a1de0ba37d52b9fccd2827926fdfc023e8e0",
           "glyph_family": 0
         },
         {
@@ -1308,8 +1753,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
-          "glyph_family": 1
+          "sha256": "fe1919cc201228e6ae542cde4357b5bb3c02d097be34831421bf27d5d3cb549b",
+          "glyph_family": 0
         },
         {
           "id": "bls_survive_thread",
@@ -1321,8 +1766,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
-          "glyph_family": 0
+          "sha256": "97735469ded403e70d13f96dea949b41dff1a570715e3a590d346f2da0189bfe",
+          "glyph_family": 3
         },
         {
           "id": "bls_sword_tempo",
@@ -1334,7 +1779,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "sha256": "882999b0224f5cc2fd890b8a7660c238230b4ed6999f92c13a784c319a55b97a",
           "glyph_family": 0
         },
         {
@@ -1347,7 +1792,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "sha256": "5fbe18a72e761506c1f4bef6c5a71d1f8db257bfde4d9e81d7a04e1ec7236366",
           "glyph_family": 0
         },
         {
@@ -1360,8 +1805,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "1478b1118733284b14fedd8cc7438c0b139d9b68a910ba8d2a38aaf5becdbb05",
-          "glyph_family": 7
+          "sha256": "5dedc0309f68bf674007cb35e5ce6a784b10aced4f6fc014ce7a7a7c495cb050",
+          "glyph_family": 2
         },
         {
           "id": "bls_anchor_memory",
@@ -1373,8 +1818,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "0af5a5e37377d6bb381d960d2aa399d9ca77b5608f4ee0d364b35b1c25a0ef97",
-          "glyph_family": 3
+          "sha256": "1a1c67a7ad4f37b3962e42d8c21fd60b8ab36691e0f5bc6eb0d87d3441abce21",
+          "glyph_family": 5
         },
         {
           "id": "bls_echo_harvest",
@@ -1386,7 +1831,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "6b3f21ee4274161354267d5d254d84713669d514ddd3e6af3ee261aa33681c9f",
+          "sha256": "91bcb2a15210eb1ab8dfe9c6224ae2cb449f2e3a056c8a66306c085b02f12eac",
           "glyph_family": 5
         },
         {
@@ -1399,7 +1844,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "sha256": "0063ad22c15db8e9afb2cd838e083dde35c25eb867c4e06ae7847ddf01d54d24",
           "glyph_family": 4
         },
         {
@@ -1412,8 +1857,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "20b347c4deff50858ffb4889ff16e470b1459967bc637e07bd1bc0fe131defbd",
-          "glyph_family": 10
+          "sha256": "024a7be9b1b5db1e107f7e38ccdb3eced7e48cf78f2ad51f4eaefcbe53c2c9ee",
+          "glyph_family": 0
         },
         {
           "id": "bls_rift_bloom",
@@ -1425,8 +1870,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
-          "glyph_family": 4
+          "sha256": "609b825caa226b77fddc74c3c43d9c8bd61ba4c36af4aee657889e827727c5ee",
+          "glyph_family": 11
         },
         {
           "id": "bls_cadence_chain",
@@ -1438,7 +1883,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "6cb06ac2d16295acf5357d5f001fd8f72b039faa24388b0232d117e1fa213785",
+          "sha256": "05faf3a696774ba4364a270bb8a5d210c0f7b0b5fc554295b733707212e0efaa",
           "glyph_family": 2
         },
         {
@@ -1451,7 +1896,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "20b347c4deff50858ffb4889ff16e470b1459967bc637e07bd1bc0fe131defbd",
+          "sha256": "3ec5b77d05d94157bd3d45ca498bbdb04134f50b517e8603f6358f213e9d2210",
           "glyph_family": 10
         },
         {
@@ -1464,7 +1909,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
+          "sha256": "019eb720f3806789d368b58189a0d8b5432dacb1a50437ce5fbda457b506f666",
           "glyph_family": 4
         },
         {
@@ -1477,7 +1922,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "1478b1118733284b14fedd8cc7438c0b139d9b68a910ba8d2a38aaf5becdbb05",
+          "sha256": "ef9266d830e377745e5553aef7e3dca292045ac272cedd7d466a53df589d272e",
           "glyph_family": 7
         },
         {
@@ -1490,7 +1935,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "sha256": "1f695c7a0b4d668310700f48efa37c67494560d1d11b7eefe1493cfb51ab1599",
           "glyph_family": 1
         },
         {
@@ -1503,8 +1948,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "6bfd5429c1f9a44e760fb31402a182c344dec43cab047ff60c9132a4fe00e593",
-          "glyph_family": 11
+          "sha256": "9a567a76ef126da645c51bb1ad1e349eebcb69014e3b02fe2b7010e993299185",
+          "glyph_family": 2
         },
         {
           "id": "bls_guard_reserve",
@@ -1516,8 +1961,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "0af5a5e37377d6bb381d960d2aa399d9ca77b5608f4ee0d364b35b1c25a0ef97",
-          "glyph_family": 3
+          "sha256": "dab2ad5b59d375d00162ac114589e56524f3d85d758665b13ea977f5cb8a18ae",
+          "glyph_family": 6
         },
         {
           "id": "bls_aegis_tempo",
@@ -1529,7 +1974,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "sha256": "b608f7806df5d8afc902af94a91851b08114a672b5b32bc4c9459556fa2e7379",
           "glyph_family": 0
         },
         {
@@ -1542,7 +1987,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "42d6917f0c00546f297cf9747464810e3ca8d6e83eef396f933cdedc1cd01cce",
+          "sha256": "4823149888be9a5a417bff429b8d6604fe1a3b98646667228bd91c69565fb6c3",
           "glyph_family": 9
         },
         {
@@ -1555,8 +2000,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "80de94c2ddd4c8f9ebb2f1b73639b6cc9067ad2c76a5e4a5c3f29b1e3fbd2fca",
-          "glyph_family": 4
+          "sha256": "d5f1f6e0cbf96e8e4680ec974ceaaefbf186ed4d638b7bb216988d7cb73daecf",
+          "glyph_family": 2
         },
         {
           "id": "bls_ballistic_clock",
@@ -1568,7 +2013,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
+          "sha256": "48104c3526bf2d0c0bfe4f3ff1bfe661b316eecbcd17e1f0d48df51b9205c924",
           "glyph_family": 0
         },
         {
@@ -1581,7 +2026,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "sha256": "9e47c3803338e435a6168315caf2eebe0d7769f1b7509485cde0d61dad969ee7",
           "glyph_family": 1
         },
         {
@@ -1594,7 +2039,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "ac513fe40bc5202786ccbc0ac03a698ceca0e506edd420416a2d2bb7db976760",
+          "sha256": "da6667ecbffb447d7e921f43a03bbe32fa8b3ab7bd173674b600ad0ec207a938",
           "glyph_family": 1
         },
         {
@@ -1607,8 +2052,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "d56facbcac7a431fc2da2bfb608ac689f514ad9141b0c6bb658b4f0e41d5c4cb",
-          "glyph_family": 6
+          "sha256": "fba0d9a6402f502e5ea129fa63756f83f773d4213c698e9adf5dda76428d7f3b",
+          "glyph_family": 4
         },
         {
           "id": "bls_chronal_reserve",
@@ -1620,8 +2065,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
-          "glyph_family": 0
+          "sha256": "d550123ec3d1fc04b6f29a667ad199b51eeedfb2796888cd426855e239b63cd0",
+          "glyph_family": 6
         },
         {
           "id": "bls_wayfinder_mercy",
@@ -1633,8 +2078,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
-          "glyph_family": 0
+          "sha256": "97be13051c21abb4d6542876e489ce9986b4a846b22120bcc95a7edcbfdad047",
+          "glyph_family": 3
         },
         {
           "id": "bls_adaptive_arsenal",
@@ -1646,8 +2091,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9283d4c90dad4ee632c44b2749a2747fd2edcc76cec0acc95e8f5d3940b5976a",
-          "glyph_family": 0
+          "sha256": "169bc3cf09c8bb893c8b07c982bc72da79321cbdd29ed33df2b50e11c9032aff",
+          "glyph_family": 2
         }
       ]
     },
@@ -1666,7 +2111,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "58a0e89c60d854ee01b94aeaf179a67e0e68373c9543aaf9163e6f2b1742b548",
           "glyph_family": 0
         },
         {
@@ -1679,8 +2124,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "66517693800c01c05ac8a4bdc1cc58e72b745f391af4d70cae69e242ede1dd10",
-          "glyph_family": 2
+          "sha256": "b99a4698fc392d3584fdaea7a1c454d1b5bd4a021ac785f2dd96a360848abc7b",
+          "glyph_family": 7
         },
         {
           "id": "glass_tempo",
@@ -1692,7 +2137,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "417e75adb5e3595e827266a0213c213658ea4be66e45f29265aa72daca1d1520",
           "glyph_family": 0
         },
         {
@@ -1705,8 +2150,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
-          "glyph_family": 9
+          "sha256": "2611b6d4f42f1d86488c975b62e403c4fc1735527565cf3827f8820fb8b8cb80",
+          "glyph_family": 3
         },
         {
           "id": "overclocked_stasis",
@@ -1718,7 +2163,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "df03597a96d77ec6d5ca6bbc2722f52724e025f4befba841058ae626ec54ef06",
           "glyph_family": 0
         },
         {
@@ -1731,7 +2176,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "a103d7ab162dd739c308636b5c63610e1df83ccc191be2f24c1b864daefe58e5",
           "glyph_family": 0
         },
         {
@@ -1744,7 +2189,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "8132f2257b7ca286313f02dd1349aa8db975c2d24a98300235326256589a55fa",
           "glyph_family": 0
         },
         {
@@ -1757,8 +2202,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "4a67cf3c521ca123b6b0661e7dc863f19dcb308360382d42db344ca298cd709a",
-          "glyph_family": 8
+          "sha256": "d31086b57ed3cc638172093f8b35d6ab19fa71dbb992c2846cd3ec987883b021",
+          "glyph_family": 0
         },
         {
           "id": "curse_blood_memory",
@@ -1770,7 +2215,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "911dc018ad3be34b7e67bc9bbb00b07428a4754662a9367004d50f8a5677e75f",
+          "sha256": "e3a02d310c3eafa1c6bd9c2d5878eafac46c224acaefe4f1d393759a87554046",
           "glyph_family": 5
         },
         {
@@ -1783,8 +2228,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "11aa20febffb42cc801812b249dbb052609867069c4bd541a56d97c7ce70a25d",
-          "glyph_family": 10
+          "sha256": "f3e89537b22d4f9ecb10e2c5bbfcd4477639e4e925bad35cbdb8d98d453177fa",
+          "glyph_family": 3
         },
         {
           "id": "curse_starved_horizon",
@@ -1796,8 +2241,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "66517693800c01c05ac8a4bdc1cc58e72b745f391af4d70cae69e242ede1dd10",
-          "glyph_family": 2
+          "sha256": "168c515d433d1eaa6ffff49e030ae4ce0854bbd795c61047021b9d7d7d9de69a",
+          "glyph_family": 0
         },
         {
           "id": "curse_folded_hunger",
@@ -1809,8 +2254,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
-          "glyph_family": 4
+          "sha256": "0c19707e5f5b5d5998b95fb751fd0e273fce5e8052512b526971f7ea574347f3",
+          "glyph_family": 7
         },
         {
           "id": "curse_glass_cadence",
@@ -1822,8 +2267,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "e4c7201fa74acddce0f81dae0806349977090093b12d3a3098536918e0d8a544",
-          "glyph_family": 1
+          "sha256": "485c4430f9be59619e794506117caa0434f16f7a7ad0c831f3877a50b0a8273a",
+          "glyph_family": 3
         },
         {
           "id": "curse_burnout_clock",
@@ -1835,7 +2280,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "0f2eead674c72a34644db5582045dc285ebbf91595991bf23f972c3a123a72eb",
           "glyph_family": 0
         },
         {
@@ -1848,8 +2293,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
-          "glyph_family": 9
+          "sha256": "7063bb4e28610951133f7774e2430152ad6f946873abc3e64295cba9e9a80367",
+          "glyph_family": 3
         },
         {
           "id": "curse_empty_veins",
@@ -1861,8 +2306,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "911dc018ad3be34b7e67bc9bbb00b07428a4754662a9367004d50f8a5677e75f",
-          "glyph_family": 5
+          "sha256": "4e7f1e735eeb760bb4fb47270f1ff1827a18bd56b9cbb291f17fae92fef67182",
+          "glyph_family": 7
         },
         {
           "id": "curse_narrow_counter",
@@ -1874,7 +2319,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
+          "sha256": "1d0a575681a87da0c38fc075705e42ea2ebc2c21bf4eb484543b548b48fe0178",
           "glyph_family": 9
         },
         {
@@ -1887,7 +2332,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5142d1b7879b8b5e3eec549d3b19349d2c64d1479cc14953309b2b4ce181d3b9",
+          "sha256": "8718037984331916ededc5a34a25850909797d530d31ad81b6b89ca9b3189c2c",
           "glyph_family": 3
         },
         {
@@ -1900,8 +2345,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
-          "glyph_family": 4
+          "sha256": "c059500e132f05d9eed6b2f34d7e08a2a60ac418d8afd024e4f465d009861a7c",
+          "glyph_family": 2
         },
         {
           "id": "curse_empty_magazine",
@@ -1913,8 +2358,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "b3333f0762e6b43280380cf19b01ecadf65142340533fc9f0fcfa77b622d2017",
-          "glyph_family": 4
+          "sha256": "c490062530aaaeb71cd34f6f1e9ee6c17fbaf7b28fd2958207eeb387f0e6b2b5",
+          "glyph_family": 2
         },
         {
           "id": "curse_divided_self",
@@ -1926,8 +2371,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d3721c2d9f411c3d2cefa44aea7b698f869de5a381f03497572bd5a10e92879",
-          "glyph_family": 9
+          "sha256": "dfcc527e4083587fe80ca219b1d4c30804e3634f75cace9508e21ba41a007e65",
+          "glyph_family": 3
         },
         {
           "id": "curse_phantom_attention",
@@ -1939,8 +2384,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5142d1b7879b8b5e3eec549d3b19349d2c64d1479cc14953309b2b4ce181d3b9",
-          "glyph_family": 3
+          "sha256": "c9f9a953dec5cb5acf9c07f9b894478d185326023682ea4ce8664005d7f12d20",
+          "glyph_family": 4
         },
         {
           "id": "curse_fickle_time",
@@ -1952,7 +2397,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f6394c7ec243999f779777a9334c5b7b16768c4806d241a20a7e767261f30d7d",
+          "sha256": "b03baaed73cf29fa992155cccf5d5d3c0c61380ace45441ea3a18bc2a444d80a",
           "glyph_family": 0
         },
         {
@@ -1965,8 +2410,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "79ad8df6577cc1a7473f79ac41ad4e4c9cd152a406d962c7738456016a80f616",
-          "glyph_family": 6
+          "sha256": "051965da25a453efc05b36fde31548880a39bc83fd62a03cb290669b5cc068c3",
+          "glyph_family": 3
         }
       ]
     },
@@ -1985,7 +2430,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "76763232f1192e568632abcb32fffe18d2b22ccffdee7f6ed7d2e8a1c6b7a526",
+          "sha256": "88ce5282fc32bc9ad1464dc808a4935b4fb7a06498d79f400381ddce2fa034a2",
           "glyph_family": 6
         },
         {
@@ -1998,8 +2443,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
-          "glyph_family": 7
+          "sha256": "7ba0efb75547dc8dca31428c9d71f0da61779cde9ff062f84cf9df87cf286173",
+          "glyph_family": 2
         },
         {
           "id": "tal_steel_recover",
@@ -2011,8 +2456,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
-          "glyph_family": 7
+          "sha256": "ab717ab81d584f158f2d64ccd27c3c0625a1573e12699516255c44d71debd36e",
+          "glyph_family": 3
         },
         {
           "id": "widened_guard",
@@ -2024,7 +2469,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
+          "sha256": "d41281ef97f370e82c805262729af6a1b281643e505377c95e144c2a6c8fa273",
           "glyph_family": 3
         },
         {
@@ -2037,8 +2482,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
-          "glyph_family": 3
+          "sha256": "9090be103315fea689c3d20437580c787cf8d6dac1a39bc1c1694dc538dea67a",
+          "glyph_family": 6
         },
         {
           "id": "temporal_rebuke",
@@ -2050,7 +2495,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "86944cbe9188e7fda16409c0be31ba1971dc64c01d874135345f6cfc413af091",
+          "sha256": "a8a2f26db31e1612444996809e307d47c7664bc2cb21c243a68cff2063e53bbd",
           "glyph_family": 0
         },
         {
@@ -2063,8 +2508,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "5f61231240442e256b91d8c0593d497827341b9665f73928d1f057f6640997c9",
-          "glyph_family": 10
+          "sha256": "54127c489f2b038325847fbe3a705563331f32c9e34ea523d46eaba588935486",
+          "glyph_family": 4
         },
         {
           "id": "bounded_devour",
@@ -2076,7 +2521,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "94642ac10a902d5b8682262aebf2ab118e05b97d23174dbd878fd77888e56003",
+          "sha256": "e0756110bee972d29084cb8ee3559603fdcbc328bf903ab5468583add733a498",
           "glyph_family": 7
         },
         {
@@ -2089,8 +2534,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "7a9a49721eb8fe8eb5946759652d95b5cf435559d52c49835bbe56a85ec19729",
-          "glyph_family": 3
+          "sha256": "84aa44e06332b6b5b5f6eebafdf5543b8fd78c9a2c9b9c6b494f226a88ec25d1",
+          "glyph_family": 4
         },
         {
           "id": "resonant_plate",
@@ -2102,8 +2547,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d103dd7b8f245bb6a3627192fac6dcd48eb016c70e0a02da76926df4d00e16c",
-          "glyph_family": 8
+          "sha256": "3fe60f46e921718176fe27525d57d15560e23cd1597d290154a6d0e391dd79b6",
+          "glyph_family": 2
         },
         {
           "id": "echo_forge",
@@ -2115,7 +2560,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "b6fb47799be3906e16c5d0572dce9e46d62cb529819c17d3a4dddfb8c2f40879",
+          "sha256": "43b82bd5d66826c81a90f75836a0c8c870050d53fa270170afe72a1a8a6f18c0",
           "glyph_family": 5
         },
         {
@@ -2128,8 +2573,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "76763232f1192e568632abcb32fffe18d2b22ccffdee7f6ed7d2e8a1c6b7a526",
-          "glyph_family": 6
+          "sha256": "977fb51ea33152386b085be5ae15384ee6a1d8cf9a56ac37825a24d18691dca0",
+          "glyph_family": 2
         },
         {
           "id": "codex_margin",
@@ -2141,8 +2586,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "86944cbe9188e7fda16409c0be31ba1971dc64c01d874135345f6cfc413af091",
-          "glyph_family": 0
+          "sha256": "e35c968184338bac559b40468f484a43291a051d2d3398f734959529676682e3",
+          "glyph_family": 5
         },
         {
           "id": "efficient_inscription",
@@ -2154,8 +2599,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "a4265c1853fd3e7d0d9478846d00739ebd5c0b412bc2b937db69d71da9a280c7",
-          "glyph_family": 4
+          "sha256": "7cc6f7eed6e0f8e48d4bc432738727b95758625a716c0ebec2a440a8b472422f",
+          "glyph_family": 5
         },
         {
           "id": "dominion_cadence",
@@ -2167,7 +2612,7 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "9d103dd7b8f245bb6a3627192fac6dcd48eb016c70e0a02da76926df4d00e16c",
+          "sha256": "dd5305fd070a6c342d0f6d0fbbdb4ec3ca1e6194161cbc57041585eccc1b96d3",
           "glyph_family": 8
         }
       ]
@@ -2187,8 +2632,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "275f0db8da3e1c01f9ba511e412169eca417937f9806c084cc91e607411bec5b",
-          "glyph_family": 4
+          "sha256": "7abc769e4a3ade3cf6fc1e67a327f1d89dbc64b7327d0bd1c0885ec093bbc18e",
+          "glyph_family": 8
         },
         {
           "id": "daily_boss",
@@ -2200,8 +2645,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "727f5f4b0da84a70afbd257a6c48a9b0698e35257fa9147f5497066e116f17eb",
-          "glyph_family": 11
+          "sha256": "6153d6e12f317c780b8042006accc1ad317546aa0ee251daa76e0b4f3e1658df",
+          "glyph_family": 0
         },
         {
           "id": "authored_challenges",
@@ -2213,8 +2658,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "727f5f4b0da84a70afbd257a6c48a9b0698e35257fa9147f5497066e116f17eb",
-          "glyph_family": 11
+          "sha256": "bb8c957881e2a37a382a176580b18e4effbec8284c07ae5ca1e1559f0e67290b",
+          "glyph_family": 2
         },
         {
           "id": "training",
@@ -2226,8 +2671,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "275f0db8da3e1c01f9ba511e412169eca417937f9806c084cc91e607411bec5b",
-          "glyph_family": 4
+          "sha256": "39c3495524520034b60aa959d13c6f7ca1bc7040143e3a6e6a31e7b0cd314960",
+          "glyph_family": 1
         },
         {
           "id": "endless",
@@ -2239,8 +2684,8 @@
           "frame_height": 32,
           "frame_count": 4,
           "filter": "nearest",
-          "sha256": "f74c1d8b4ceaee406348825e07fac3db14b538b42ccbe84ad092d926bfe24bd6",
-          "glyph_family": 9
+          "sha256": "865889d75f40db9b27ed435d04e1fd1b360dd718e9b5aa78e9c633198fdcf459",
+          "glyph_family": 4
         }
       ]
     },

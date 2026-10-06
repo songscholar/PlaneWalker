@@ -1,6 +1,11 @@
 # Native Hub UI Layout Evidence
 
 - Status: Partial UI milestone retained; full UI finish remains active
+- Document Role: Current local Hub layout evidence
+- Authority Level: Execution evidence below the approved UI design
+- Applies To: Native Hub page layout and focus preservation
+- Owner: UI completion agent
+- Depends On: [Native UI finish design](../superpowers/specs/2026-10-06-native-ui-finish-design.md)
 - Scope: Shared bounded shell and nine dedicated Hub page layouts
 - Authority: `AGENTS.md` and the 2026-10-06 native UI finish specification
 - Last Verified: 2026-10-06

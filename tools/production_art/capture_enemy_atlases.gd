@@ -54,8 +54,8 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _assert_enemy_pixels(suite, pixels: Image, sprite: Sprite2D) -> void:
-	var source := sprite.texture.get_image()
+func _assert_enemy_pixels(suite, pixels: Image, sprite: Sprite2D, minimum_samples: int = 80) -> void:
+	var source := Image.load_from_file(ProjectSettings.globalize_path(sprite.texture.resource_path))
 	var region := Rect2(Vector2(sprite.frame_coords) * sprite.get_rect().size, sprite.get_rect().size)
 	var transform := sprite.get_global_transform_with_canvas()
 	var samples := 0
@@ -70,4 +70,4 @@ func _assert_enemy_pixels(suite, pixels: Image, sprite: Sprite2D) -> void:
 			if absf(expected.r - rendered.r) > 0.005 or absf(expected.g - rendered.g) > 0.005 or absf(expected.b - rendered.b) > 0.005:
 				mismatches += 1
 			samples += 1
-	suite.assert_true(samples >= 80 and mismatches == 0, "%s/%s shows production pixels: %d/%d mismatch" % [sprite.texture.resource_path, sprite.frame, mismatches, samples])
+	suite.assert_true(samples >= minimum_samples and mismatches == 0, "%s/%s shows production pixels: %d/%d mismatch" % [sprite.texture.resource_path, sprite.frame, mismatches, samples])
