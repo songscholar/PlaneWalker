@@ -2,6 +2,7 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Main := preload("res://scenes/main.tscn")
+const Retirement := preload("res://tests/support/audio_playback_retirement.gd")
 var _context := {"cue_id": "music_hub", "paused": false}
 
 
@@ -87,9 +88,13 @@ func _run() -> void:
 		suite.assert_equal(host.runtime_snapshot(), run_before, "music cannot change any Run field")
 		suite.assert_equal(GameState.profile_runtime_service().snapshot(), profile_before, "music cannot write Profile facts")
 		suite.assert_equal(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(&"Music")), bus_volume, "soundtrack leaves the accessibility volume authority unchanged")
+	var playback_refs: Array[WeakRef] = []
+	for deck: Node in main.get_node("MusicDirector").get_children():
+		if deck is AudioStreamPlayer and deck.playing and deck.get_stream_playback() != null:
+			playback_refs.append(weakref(deck.get_stream_playback()))
 	main.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	# Allow the audio server to retire its final queued playback buffers.
-	await get_tree().create_timer(0.1).timeout
+	suite.assert_true(await Retirement.await_release(get_tree(), playback_refs), "actual Main audio retirement finishes within the wall-time deadline")
+	suite.assert_true(playback_refs.all(func(reference: WeakRef): return reference.get_ref() == null), "Main releases independent music playback before exit")
 	suite.finish(get_tree())

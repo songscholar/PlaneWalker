@@ -12,6 +12,7 @@ const Route := preload("res://tests/support/native_launch_route_fixture.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 const FailureProbe := preload("res://tests/support/native_frame_failure_probe.gd")
+const Retirement := preload("res://tests/support/audio_playback_retirement.gd")
 const SURVIVAL_SOURCE := &"p15_full_run_survival_fixture"
 const MAX_ROOM_FRAMES := 18000
 
@@ -303,10 +304,7 @@ func _dispose_main() -> void:
 	main.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	for _step: int in range(20):
-		if playback_refs.all(func(reference: WeakRef): return reference.get_ref() == null):
-			break
-		await get_tree().create_timer(0.01).timeout
+	suite.assert_true(await Retirement.await_release(get_tree(), playback_refs), "full actual Main audio retirement finishes within the wall-time deadline")
 	suite.assert_true(playback_refs.all(func(reference: WeakRef): return reference.get_ref() == null), "full actual Main run releases independent music playback before process exit")
 
 
