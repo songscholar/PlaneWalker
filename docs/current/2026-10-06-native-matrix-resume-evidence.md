@@ -88,7 +88,7 @@ does not certify the full matrix.
 
 ## Tests
 
-- `python3 -m unittest tests/contract/playtest/test_native_boss_matrix_report.py`: 21 passed.
+- `python3 -m unittest tests/contract/playtest/test_native_boss_matrix_report.py`: 26 passed after the hardening follow-up below.
 - `tests/integration/playtest/native_matrix_persistence_test.tscn`: passed.
 - `python3 tools/runtime_log_validation.py` over both attempt stdout/engine pairs: passed.
 - `git diff --check`: passed.
@@ -122,3 +122,29 @@ is `761a56800f1af78caf32ed6696bc82575af3bd7f72770459354dc34ab8306292`.
 
 This is a clean-commit bounded pilot only; it does not certify the 750-case
 matrix or human playability.
+
+## Resume Hardening Follow-Up
+
+The wrapper now checks the selected commit's entire runtime source scope in
+both directions. Missing and extra paths both refuse before any process launch
+or source-manifest write. Every retained attempt requires the same requested
+range and source. A `finished` attempt requires integer exit code 0, `timed_out`
+requires integer exit code 124, and an interrupted `running` attempt must have
+no exit-code field. Prior nonzero finished executions cannot be relabeled as
+successful by a later resume.
+
+Output, manifest, attempts, attempt directories, retained logs and atomic-write
+temporary files refuse symlink redirection before writing or launching Godot.
+The persistence scene additionally compares the restored row's complete
+`var_to_bytes` representation with the original row, independently of numeric
+Dictionary equality.
+
+The five new regressions all fail against the unchanged wrapper from `0c78b98`
+(SHA-256 `4ab3854b6e23b7647b5f721d7d42a3c231701176f41cce9513ce81a624fb0b8e`).
+The only test compatibility shim discards the newly added expected-range
+arguments; it does not change the old validator implementation. The retained
+RED log is `build/native-matrix-review-hardening-20261006/original-contracts-red-head.log`.
+Candidate Python contracts pass 26/26. The updated native persistence scene
+passes 1/1 with strict stdout and engine logs under
+`build/native-matrix-review-hardening-20261006/persistence/`. These focused
+results do not replace full-matrix or human-playtest certification.
