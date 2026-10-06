@@ -18,6 +18,7 @@ const SigilDamage := preload("res://scripts/combat/damage_info.gd")
 const SigilCalculator := preload("res://scripts/combat/damage_calculator.gd")
 const PhaseShift := preload("res://scripts/enemies/launch/phase_ranger_shift_runtime.gd")
 const PhaseArrival := preload("res://scripts/enemies/launch/phase_ranger_arrival_cue.gd")
+const NativeFrameToken := preload("res://scripts/enemies/launch/native_hostile_frame_token.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -31,6 +32,9 @@ var _launch_definition: Dictionary = {}
 var _launch_identity: Dictionary = {}
 var _prepared_launch_frame: Dictionary = {}
 var _prepared_frame_committed := false
+var _native_launch_frame_token: RefCounted
+var _native_launch_frame_authority: WeakRef
+var _native_launch_frame_mutating := false
 var _next_launch_ticket_id := 1
 var _action_credit := 0.0
 var _death_receipt := ""
@@ -74,13 +78,14 @@ func owns_actor_presentation() -> bool:
 
 
 func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = AffixProjection.CURRENT_NATIVE_REVISION) -> Dictionary:
-	if not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
+	if _native_launch_frame_mutating or not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
 		return _launch_failure("affix_configuration_busy")
 	var candidate := AffixProjection.new()
 	var accepted := candidate.configure(definitions, floor_index, native_revision)
 	if not accepted.ok:
 		return _launch_failure("affix_configuration")
 	_affix_projection = candidate
+	_revoke_native_launch_frame_token()
 	return {"ok": true}
 
 
@@ -93,7 +98,7 @@ func launch_affix_runtime_snapshot() -> Dictionary:
 
 
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
-	if not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
+	if _native_launch_frame_mutating or not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
 		return _launch_failure("not_ready_or_busy")
 	var affix_configuration := {}
 	if _affix_projection != null:
@@ -118,6 +123,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not health.configure_run(StringName(context.run_id)):
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
+	_revoke_native_launch_frame_token()
 	_body_preview_runtime = null
 	_frame_preview_slots.clear()
 	_affix_configuration = affix_configuration
@@ -144,7 +150,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 
 
 func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not _room_motion.is_empty() or _native_runtime_frame(_launch_runtime) != int(_launch_identity.runtime_frame):
+	if _native_launch_frame_mutating or _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not _room_motion.is_empty() or _native_runtime_frame(_launch_runtime) != int(_launch_identity.runtime_frame):
 		return _launch_failure("room_motion_busy")
 	var verified: Dictionary = RoomContract.validate(room, template)
 	if not verified.ok or not room.is_inside_tree() or not _translation_only(room.global_transform) or not _native_geometry_matches_definition() or collision_layer != 4 or not get_collision_mask_value(1):
@@ -160,6 +166,7 @@ func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Diction
 	_motion_room = room
 	_motion_room_transform = room.global_transform
 	_motion_room_local_bounds = local_bounds
+	_revoke_native_launch_frame_token()
 	return {"ok": true, "room_motion": launch_room_motion_snapshot()}
 
 
@@ -187,6 +194,15 @@ func project_runtime_snapshot(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
+	if _native_launch_frame_mutating:
+		return _launch_failure("native_frame_busy")
+	var prepared := _prepare_owned_launch_frame(frame, observations)
+	if not prepared.ok:
+		return prepared
+	return {"ok": true, "ticket": _prepared_launch_frame.duplicate(true), "batch": prepared_launch_frame_batch()}
+
+
+func _prepare_owned_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _native_runtime_is_terminal(_launch_runtime):
 		return _launch_failure("unavailable")
 	if not _room_motion.is_empty() and (not _room_motion_is_valid() or not _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px))):
@@ -340,9 +356,104 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var after := _actor_frame_candidate(before, preview.snapshot(), status_preview.transaction_snapshot(), _point(predicted), _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0)), next_credit, affix_after)
 	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot(), "collision_target": collision_target}
 	_next_launch_ticket_id += 1
-	_prepared_launch_frame = ticket.duplicate(true)
+	_prepared_launch_frame = ticket
 	_prepared_frame_committed = false
-	return {"ok": true, "ticket": ticket.duplicate(true), "batch": batch.duplicate(true)}
+	_revoke_native_launch_frame_token()
+	return {"ok": true}
+
+
+func supports_native_launch_frame_protocol() -> bool:
+	return get_script() in [LaunchHostileActor, LaunchBossActor]
+
+
+func configure_hostile_threat_authority(registry: RefCounted, runtime_frame_provider: Callable = Callable()) -> bool:
+	if _native_launch_frame_mutating or not super.configure_hostile_threat_authority(registry, runtime_frame_provider):
+		return false
+	_revoke_native_launch_frame_token()
+	return true
+
+
+func configure_hostile_identity(source_id: StringName, next_generation_floor: int = 1) -> bool:
+	if _native_launch_frame_mutating or not super.configure_hostile_identity(source_id, next_generation_floor):
+		return false
+	_revoke_native_launch_frame_token()
+	return true
+
+
+func configure_elemental_status_seed(deterministic_seed: int, slow_floor_multiplier: float = 0.30, attack_slow_floor_multiplier: float = -1.0) -> void:
+	if _native_launch_frame_mutating:
+		return
+	super.configure_elemental_status_seed(deterministic_seed, slow_floor_multiplier, attack_slow_floor_multiplier)
+	_revoke_native_launch_frame_token()
+
+
+func retire_hostile_identity(reason: StringName = &"retired") -> void:
+	if _native_launch_frame_mutating:
+		return
+	super.retire_hostile_identity(reason)
+	_revoke_native_launch_frame_token()
+
+
+func prepare_native_launch_frame(frame: int, observations: Dictionary, authority: RefCounted) -> Dictionary:
+	if not supports_native_launch_frame_protocol() or _native_launch_frame_mutating or not _native_frame_bridge_binding(authority) or not authority.owns_native_actor_preparation_context(self, frame):
+		return _launch_failure("native_frame_authority")
+	_native_launch_frame_mutating = true
+	var prepared := _prepare_owned_launch_frame(frame, observations)
+	_native_launch_frame_mutating = false
+	if not prepared.ok:
+		_revoke_native_launch_frame_token()
+		return prepared
+	_native_launch_frame_token = NativeFrameToken.new()
+	_native_launch_frame_authority = weakref(authority)
+	return {"ok": true, "token": _native_launch_frame_token, "batch": prepared_launch_frame_batch()}
+
+
+func owns_native_launch_frame_token(token: RefCounted, authority: RefCounted) -> bool:
+	return not _native_launch_frame_mutating and token != null and is_same(token, _native_launch_frame_token) and _native_launch_frame_authority != null and is_same(_native_launch_frame_authority.get_ref(), authority) and not _prepared_launch_frame.is_empty() and _native_frame_bridge_binding(authority) and authority.owns_native_actor_frame_context(self, token, int(_prepared_launch_frame.runtime_frame))
+
+
+func can_commit_native_launch_frame(token: RefCounted, authority: RefCounted) -> bool:
+	return owns_native_launch_frame_token(token, authority) and can_commit_launch_frame(_prepared_launch_frame)
+
+
+func commit_native_launch_frame(token: RefCounted, authority: RefCounted) -> bool:
+	if not owns_native_launch_frame_token(token, authority):
+		return false
+	_native_launch_frame_mutating = true
+	var accepted := _commit_owned_launch_frame(_prepared_launch_frame)
+	_native_launch_frame_mutating = false
+	return accepted
+
+
+func rollback_native_launch_frame(token: RefCounted, authority: RefCounted) -> bool:
+	if not owns_native_launch_frame_token(token, authority):
+		return false
+	_native_launch_frame_mutating = true
+	var accepted := _rollback_owned_launch_frame(_prepared_launch_frame)
+	_native_launch_frame_mutating = false
+	return accepted
+
+
+func can_publish_native_launch_frame(token: RefCounted, authority: RefCounted) -> bool:
+	return owns_native_launch_frame_token(token, authority) and can_publish_launch_frame(_prepared_launch_frame)
+
+
+func publish_native_launch_frame(token: RefCounted, authority: RefCounted) -> bool:
+	if not owns_native_launch_frame_token(token, authority):
+		return false
+	_native_launch_frame_mutating = true
+	var accepted := _publish_owned_launch_frame(_prepared_launch_frame)
+	_native_launch_frame_mutating = false
+	return accepted
+
+
+func _native_frame_bridge_binding(authority: RefCounted) -> bool:
+	return authority != null and authority.get_script() == HostileFrameBridge and _hostile_threat_registry != null and is_same(_hostile_threat_registry, authority.get("_registry")) and _hostile_runtime_frame_provider == Callable(authority, "_current_runtime_frame")
+
+
+func _revoke_native_launch_frame_token() -> void:
+	_native_launch_frame_token = null
+	_native_launch_frame_authority = null
 
 
 func _native_frame_preview(state: Dictionary, slot: StringName) -> RefCounted:
@@ -494,6 +605,12 @@ func can_commit_launch_frame(ticket: Dictionary) -> bool:
 
 
 func commit_launch_frame(ticket: Dictionary) -> bool:
+	if _native_launch_frame_mutating:
+		return false
+	return _commit_owned_launch_frame(ticket)
+
+
+func _commit_owned_launch_frame(ticket: Dictionary) -> bool:
 	if not can_commit_launch_frame(ticket) or not _restore_actor_state(ticket.after):
 		return false
 	_prepared_frame_committed = true
@@ -501,12 +618,19 @@ func commit_launch_frame(ticket: Dictionary) -> bool:
 
 
 func rollback_launch_frame(ticket: Dictionary) -> bool:
+	if _native_launch_frame_mutating:
+		return false
+	return _rollback_owned_launch_frame(ticket)
+
+
+func _rollback_owned_launch_frame(ticket: Dictionary) -> bool:
 	if not _ticket_matches(ticket):
 		return false
 	if _prepared_frame_committed and not _restore_actor_state(ticket.before):
 		return false
 	_prepared_launch_frame.clear()
 	_prepared_frame_committed = false
+	_revoke_native_launch_frame_token()
 	_refresh_control_visual()
 	return true
 
@@ -516,10 +640,17 @@ func can_publish_launch_frame(ticket: Dictionary) -> bool:
 
 
 func publish_launch_frame(ticket: Dictionary) -> bool:
+	if _native_launch_frame_mutating:
+		return false
+	return _publish_owned_launch_frame(ticket)
+
+
+func _publish_owned_launch_frame(ticket: Dictionary) -> bool:
 	if not can_publish_launch_frame(ticket):
 		return false
 	_prepared_launch_frame.clear()
 	_prepared_frame_committed = false
+	_revoke_native_launch_frame_token()
 	_refresh_control_visual()
 	return true
 
@@ -585,12 +716,13 @@ func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	if not can_restore_launch_transaction_snapshot(value):
+	if _native_launch_frame_mutating or not can_restore_launch_transaction_snapshot(value):
 		return false
 	if not health.restore_transaction_snapshot(value.health) or not _restore_actor_state(value.actor):
 		return false
 	_prepared_launch_frame.clear()
 	_prepared_frame_committed = false
+	_revoke_native_launch_frame_token()
 	_hostile_identity_active = not bool(value.actor.runtime.terminal)
 	if health.is_alive() and _hostile_identity_active:
 		add_to_group("enemies")
@@ -765,9 +897,10 @@ func blocks_hostile_body_damage() -> bool:
 
 
 func bind_native_construct_budget(authority: RefCounted) -> bool:
-	if authority == null or not authority.has_method("native_construct_count") or not authority.register_native_construct_owner(self):
+	if _native_launch_frame_mutating or authority == null or not authority.has_method("native_construct_count") or not authority.register_native_construct_owner(self):
 		return false
 	_hound_construct_authority = weakref(authority)
+	_revoke_native_launch_frame_token()
 	return true
 
 

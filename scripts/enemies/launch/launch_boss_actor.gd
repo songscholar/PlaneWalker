@@ -125,37 +125,40 @@ func _restore_actor_state(value: Dictionary) -> bool:
 	return true
 
 
-func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
+func _prepare_owned_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	_flush_queued_control_visual()
 	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king", "forest_heart", "void_throne", "forge_colossus"] and not _native_geometry_matches_definition():
 		return _launch_failure("boss_native_geometry")
-	var result := super.prepare_launch_frame(frame, observations)
+	var result := super._prepare_owned_launch_frame(frame, observations)
+	if not result.ok:
+		return result
+	var ticket := _prepared_launch_frame
 	if result.ok and _launch_definition.get("id", "") == "forge_colossus":
-		return _prepare_native_forge_frame(result, observations)
+		return _prepare_native_forge_frame(ticket, observations)
 	if result.ok and _launch_definition.get("id", "") == "forest_heart":
-		return _prepare_native_forest_frame(result, observations)
+		return _prepare_native_forest_frame(ticket, observations)
 	if result.ok and _launch_definition.get("id", "") == "void_throne":
-		return _prepare_native_void_frame(result, observations)
+		return _prepare_native_void_frame(ticket, observations)
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
 		return result
-	for request: Dictionary in result.ticket.batch.effect_requests:
+	for request: Dictionary in ticket.batch.effect_requests:
 		if request.get("handler_id") != "wall":
 			continue
 		var preview := BossRuntime.new()
 		preview.configure(_launch_definition, _launch_identity)
-		if _room_motion.is_empty() or not preview.restore_snapshot(result.ticket.after.runtime):
+		if _room_motion.is_empty() or not preview.restore_snapshot(ticket.after.runtime):
 			return _launch_failure("wall_admission")
 		if not _wall_static_placement_valid(preview.native_action_snapshot()):
 			var cancelled: Dictionary = preview.cancel_action(&"wall_outside_safe_room_placement")
 			if not cancelled.ok:
 				return _launch_failure("wall_declined_admission")
-			result.ticket.batch.effect_requests = []
-			result.ticket.batch.phase = "IDLE"
-			result.ticket.batch.retired_generations.append_array(cancelled.retired_generations)
+			ticket.batch.effect_requests = []
+			ticket.batch.phase = "IDLE"
+			ticket.batch.retired_generations.append_array(cancelled.retired_generations)
 		elif not preview.accept_arena_wall_request(request, _room_motion.bounds).ok:
 			return _launch_failure("wall_admission")
-		result.ticket.after.runtime = preview.snapshot()
-	for request: Dictionary in result.ticket.batch.mechanism_requests:
+		ticket.after.runtime = preview.snapshot()
+	for request: Dictionary in ticket.batch.mechanism_requests:
 		if request.get("kind", "") == "boss_aftershock":
 			if _room_motion.is_empty():
 				return _launch_failure("aftershock_room_bounds")
@@ -165,23 +168,19 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 				return _launch_failure("wall_collapse_room_bounds")
 			request.position = _point(_native_arena_origin() + _vector(request.position))
 			request["bounds"] = _room_motion.bounds.duplicate(true)
-	result.batch = result.ticket.batch.duplicate(true)
-	_prepared_launch_frame = result.ticket.duplicate(true)
-	var target: Variant = result.ticket.collision_target
-	if target is Construct and target.get_parent() == get_node("ArenaConstructs") and result.ticket.after.runtime.action.action_id == "guardian_charge" and result.ticket.after.runtime.action.phase == "ACTIVE":
+	var target: Variant = ticket.collision_target
+	if target is Construct and target.get_parent() == get_node("ArenaConstructs") and ticket.after.runtime.action.action_id == "guardian_charge" and ticket.after.runtime.action.phase == "ACTIVE":
 		var preview := BossRuntime.new()
 		preview.configure(_launch_definition, _launch_identity)
-		if not preview.restore_snapshot(result.ticket.after.runtime):
+		if not preview.restore_snapshot(ticket.after.runtime):
 			return _launch_failure("charge_cover_checkpoint")
 		var impact: Dictionary = preview.accept_arena_charge_impact(str(target.native_construct_snapshot().id))
 		if not impact.ok:
 			return _launch_failure("charge_cover_impact")
-		result.ticket.after.runtime = preview.snapshot()
-		result.ticket.batch.hit_facts = []
-		result.ticket.batch.phase = "IDLE"
-		result.ticket.batch.retired_generations.append_array(impact.retired_generations)
-		result.batch = result.ticket.batch.duplicate(true)
-		_prepared_launch_frame = result.ticket.duplicate(true)
+		ticket.after.runtime = preview.snapshot()
+		ticket.batch.hit_facts = []
+		ticket.batch.phase = "IDLE"
+		ticket.batch.retired_generations.append_array(impact.retired_generations)
 	return result
 
 
@@ -240,9 +239,10 @@ func _native_action_activation_blocked(frame: int, observations: Dictionary) -> 
 
 
 func bind_native_construct_budget(authority: RefCounted) -> bool:
-	if authority == null or not authority.has_method("arena_debris_active_count") or not authority.register_native_construct_owner(self):
+	if _native_launch_frame_mutating or authority == null or not authority.has_method("arena_debris_active_count") or not authority.register_native_construct_owner(self):
 		return false
 	_arena_effects = weakref(authority)
+	_revoke_native_launch_frame_token()
 	return true
 
 
@@ -447,11 +447,11 @@ func settle_native_void_heal(request: Dictionary, player: Node2D, amount: float)
 	return prepared_launch_void_heal_allowed(request) and _prepared_frame_committed and player is PlayerController and player.current_run_id() == StringName(str(_launch_identity.run_id)) and (not player.health.dead or amount == 0.0) and _launch_runtime.accept_void_player_heal(str(_launch_identity.run_id), str(request.target_id), int(request.runtime_frame), float(player.health.max_hp), amount, not player.health.dead)
 
 
-func _prepare_native_void_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
-	var frame := int(result.ticket.runtime_frame)
-	var state: Dictionary = result.ticket.after.runtime
+func _prepare_native_void_frame(ticket: Dictionary, observations: Dictionary) -> Dictionary:
+	var frame := int(ticket.runtime_frame)
+	var state: Dictionary = ticket.after.runtime
 	if state.void_arena_state.phase_index == 2 and state.void_arena_state.player_heal.is_empty() and not state.terminal:
-		result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
+		ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
 	var burn_requests: Array
 	if _launch_runtime.has_method("native_void_burn_damage_requests_for_snapshot"):
 		var queried: Dictionary = _launch_runtime.native_void_burn_damage_requests_for_snapshot(state, frame)
@@ -464,13 +464,11 @@ func _prepare_native_void_frame(result: Dictionary, observations: Dictionary) ->
 			return _launch_failure("void_auxiliary_preview")
 		burn_requests = preview.void_burn_damage_requests(frame)
 	for request: Dictionary in burn_requests:
-		result.ticket.batch.mechanism_requests.append({"kind": "void_burn_tick", "request": request.duplicate(true)})
+		ticket.batch.mechanism_requests.append({"kind": "void_burn_tick", "request": request.duplicate(true)})
 	for pickup: Dictionary in state.void_auxiliary.pickups:
 		if not pickup.used and not pickup.retired and frame < int(pickup.through_frame) and _vector(pickup.position).distance_to(_vector(observations.target_position)) <= float(pickup.radius_px) + 14.0:
-			result.ticket.batch.mechanism_requests.append({"kind": "void_shard_pickup", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "pickup_id": str(pickup.id), "target_id": str(observations.target_id), "position": pickup.position.duplicate(true), "amount": 5.0})
-	result.batch = result.ticket.batch.duplicate(true)
-	_prepared_launch_frame = result.ticket.duplicate(true)
-	return result
+			ticket.batch.mechanism_requests.append({"kind": "void_shard_pickup", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "pickup_id": str(pickup.id), "target_id": str(observations.target_id), "position": pickup.position.duplicate(true), "amount": 5.0})
+	return {"ok": true}
 
 
 func prepared_launch_void_mechanism_allowed(request: Dictionary) -> bool:
@@ -626,20 +624,18 @@ func _refresh_native_forge(state: Dictionary) -> void:
 		holder.get_child(index).present(rows[index], _native_arena_origin(), bool(state.terminal))
 
 
-func _prepare_native_forge_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
-	var preview := _native_frame_preview(result.ticket.after.runtime, &"arena")
+func _prepare_native_forge_frame(ticket: Dictionary, observations: Dictionary) -> Dictionary:
+	var preview := _native_frame_preview(ticket.after.runtime, &"arena")
 	if preview == null:
 		return _launch_failure("forge_arena_candidate")
 	if not preview.native_is_terminal():
 		if not preview.observe_forge_target(str(observations.target_id), observations.target_position).ok:
 			return _launch_failure("forge_cooling_candidate")
-		for request: Dictionary in preview.forge_burn_damage_requests(int(result.ticket.runtime_frame)):
+		for request: Dictionary in preview.forge_burn_damage_requests(int(ticket.runtime_frame)):
 			request["kind"] = "forge_burn_tick"
-			result.ticket.batch.mechanism_requests.append(request)
-	result.ticket.after.runtime = preview.snapshot()
-	result.batch = result.ticket.batch.duplicate(true)
-	_prepared_launch_frame = result.ticket.duplicate(true)
-	return result
+			ticket.batch.mechanism_requests.append(request)
+	ticket.after.runtime = preview.snapshot()
+	return {"ok": true}
 
 
 func prepared_launch_forge_mechanism_allowed(request: Dictionary) -> bool:
@@ -729,28 +725,26 @@ func _refresh_native_forest_auxiliary(terminal: bool) -> void:
 		construct.present(rows[index].value, _native_arena_origin(), terminal)
 
 
-func _prepare_native_forest_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
-	var preview := _native_frame_preview(result.ticket.after.runtime, &"arena")
+func _prepare_native_forest_frame(ticket: Dictionary, observations: Dictionary) -> Dictionary:
+	var preview := _native_frame_preview(ticket.after.runtime, &"arena")
 	if preview == null:
 		return _launch_failure("forest_auxiliary_candidate")
-	for request: Dictionary in result.ticket.batch.effect_requests:
+	for request: Dictionary in ticket.batch.effect_requests:
 		if request.get("action_id") == "matriarch_void_cage" and not preview.accept_forest_cage(request):
 			return _launch_failure("forest_cage_admission")
-	for request: Dictionary in preview.forest_cage_requests(int(result.ticket.runtime_frame)):
-		if not result.ticket.batch.mechanism_requests.has(request):
-			result.ticket.batch.mechanism_requests.append(request)
+	for request: Dictionary in preview.forest_cage_requests(int(ticket.runtime_frame)):
+		if not ticket.batch.mechanism_requests.has(request):
+			ticket.batch.mechanism_requests.append(request)
 	for flower: Dictionary in preview.forest_auxiliary_snapshot().flowers:
 		if not flower.used and (_native_arena_origin() + _vector(flower.position)).distance_to(_vector(observations.target_position)) <= float(flower.radius_px) + 14.0:
-			result.ticket.batch.mechanism_requests.append({"kind": "forest_flower", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": int(result.ticket.runtime_frame), "attack_generation": int(result.ticket.runtime_frame), "hit_index": int(flower.slot), "construct_id": str(flower.id), "target_id": str(observations.target_id), "amount": 20.0})
-	for request: Dictionary in result.ticket.batch.mechanism_requests:
+			ticket.batch.mechanism_requests.append({"kind": "forest_flower", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": int(ticket.runtime_frame), "attack_generation": int(ticket.runtime_frame), "hit_index": int(flower.slot), "construct_id": str(flower.id), "target_id": str(observations.target_id), "amount": 20.0})
+	for request: Dictionary in ticket.batch.mechanism_requests:
 		if request.kind in ["forest_seed_pool", "forest_cage_pulse", "forest_cage_collapse"]:
 			if _room_motion.is_empty():
 				return _launch_failure("forest_effect_bounds")
 			request["bounds"] = _room_motion.bounds.duplicate(true)
-	result.ticket.after.runtime = preview.snapshot()
-	result.batch = result.ticket.batch.duplicate(true)
-	_prepared_launch_frame = result.ticket.duplicate(true)
-	return result
+	ticket.after.runtime = preview.snapshot()
+	return {"ok": true}
 
 
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
@@ -994,7 +988,10 @@ var _native_time_manager: WeakRef
 
 
 func bind_native_time_manager(manager: Node) -> bool:
+	if _native_launch_frame_mutating:
+		return false
 	if _launch_definition.get("id", "") != "time_sovereign":
+		_revoke_native_launch_frame_token()
 		return true
 	if not is_instance_valid(manager) or not manager.has_signal("native_ability_committed") or not manager.has_method("owns_native_ability_receipt"):
 		return false
@@ -1003,6 +1000,7 @@ func bind_native_time_manager(manager: Node) -> bool:
 	_native_time_manager = weakref(manager)
 	if not manager.native_ability_committed.is_connected(_on_native_ability_committed):
 		manager.native_ability_committed.connect(_on_native_ability_committed)
+	_revoke_native_launch_frame_token()
 	return true
 
 
@@ -1103,9 +1101,10 @@ func restore_character_boss_exposure_snapshot(value: Dictionary) -> bool:
 
 
 func configure_character_boss_exposure_replay_authority(authority: RefCounted) -> bool:
-	if authority == null or _exposure_replay_authority != null and _exposure_replay_authority != authority:
+	if _native_launch_frame_mutating or authority == null or _exposure_replay_authority != null and _exposure_replay_authority != authority:
 		return false
 	_exposure_replay_authority = authority
+	_revoke_native_launch_frame_token()
 	return true
 
 

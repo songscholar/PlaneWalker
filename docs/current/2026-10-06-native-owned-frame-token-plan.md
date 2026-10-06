@@ -1,7 +1,7 @@
 # Native Owned Frame Token Plan
 
-- Status: Draft / Current
-- Document Role: Current focused ownership investigation and proposed executable protocol
+- Status: Approved / Current
+- Document Role: Current focused ownership protocol and executable acceptance criteria
 - Authority Level: Below approved full-product completion contract
 - Applies To: Genuine native Actor and Boss frame preparation through HostileFrameBridge
 - Owner: Gameplay performance lane
@@ -22,9 +22,9 @@ change the Actor before hostile preparation. The later candidate's `before`
 cannot replace that earlier compensation point. Keep runtime restoration,
 validation, gameplay history, recorder contents and all physical capacities.
 
-## Proposed Interfaces For Root Review
+## Reviewed Interfaces
 
-The proposed opaque class is
+The opaque class is
 `scripts/enemies/launch/native_hostile_frame_token.gd`, extending `RefCounted`
 with no candidate, dictionary, array, owner or frame fields. A token's class,
 copied properties or supplied identity cannot authenticate it. Only exact
@@ -43,15 +43,18 @@ instance equality with the Actor's active marker authenticates issuance.
 | Bridge | `owns_native_actor_preparation_context(actor, frame) -> bool` | Exact currently executing prepare call and active genuine record |
 | Bridge | `owns_native_actor_frame_context(actor, token, frame) -> bool` | Active prepared frame, exact bound roster/registry/run and same record marker |
 
-Names and record fields remain proposed until Root review. Native tokens are
+Root reviewed the RED and authorized this implementation slice. Native tokens are
 not serialized or accepted by save/replay interfaces. Native failures retain
 the established Actor failure structure and refusal behavior.
 
 ## Authority And Migration
 
 Actor retains one privately owned candidate and one empty marker. Native
-preparation must be authorized by the exact configured Bridge, verified through
-the bound frame provider/registry and Bridge's active Actor record. Capture
+preparation must be authorized by the actual canonical Bridge Script object,
+verified through the exact bound `Callable(bridge, "_current_runtime_frame")`,
+same registry, run, roster and Bridge's active Actor record. Resource-path
+strings cannot establish Script identity: a different Script can take over
+the same path. Capture
 the authority without a strong ownership cycle. The marker is issued only
 after every Boss postprocessing branch succeeds. No native method returns
 mutable `before`, `after`, `health_before` or retained ticket references.
@@ -70,8 +73,10 @@ checks still dispatch through the existing Boss overrides. Do not bypass them
 by directly calling the base implementation.
 
 Bridge's private record adds `native_actor_frame` and `actor_token`, retaining
-the existing `actor_ticket` for legacy participants. Opt in only when the
-complete native protocol is present and support is explicitly true. During
+the existing `actor_ticket` for legacy participants. Opt in only for the actual
+canonical Bridge and Actor/Boss Script objects with explicit support. Unknown
+Bridge subclasses retain the public path, including the established physical
+failure injection fixtures. During
 the prepare call, expose only the exact current Actor as a transient native
 preparation context, then clear it before continuing or refusing. Native
 records pass the token back to the same Actor for all original lifecycle
@@ -100,6 +105,13 @@ publication cleanup. Candidate rollback, full transaction restoration, public
 publication, completed cleanup, configuration changes and authority replacement
 must invalidate it. Failure before token issuance grants no marker. A held
 marker cannot keep an old candidate alive or restore it after revocation.
+This includes inherited elemental-status seed configuration, Hound/Forge
+construct authority binding, Time manager binding and Boss exposure Replay
+authority binding. Accepted same-authority rebinds revoke as well. Rejected
+configuration preserves the existing marker. Native operation callbacks must
+refuse configuration before registering or replacing any authority; normal
+status applications and legitimate post-commit damage/Time receipts retain
+their original settlement semantics.
 Repeated prepare/commit/publish, consumed tokens, another Actor's token, another
 Bridge, wrong frame, changed roster, invalid/freed owner and reentrant calls
 must refuse without consuming valid compensation rights.
@@ -156,7 +168,7 @@ or removed source calls cannot certify the 16.667-ms frame budget.
 Prospective production ownership is limited to `LaunchHostileActor`,
 `LaunchBossActor`, `HostileFrameBridge` and the new empty token class. UI lane
 owns the independent Effects snapshot slice. Root owns BossRuntime parent
-restoration and integrated measurement. No production edit or staging is
-authorized for this slice until Root resolves these proposed interfaces and
-reviews the focused RED. Rendered throughput, sustained recording, saturation,
+restoration and integrated measurement. Root reviewed the focused RED and
+authorized implementation. Staging awaits independent review and the coordinated
+index window. Rendered throughput, sustained recording, saturation,
 the 45-minute soak, complete UI and human playtesting remain open.

@@ -14,6 +14,9 @@ var _next_ticket_id := 1
 var _active: Dictionary = {}
 var _detached: Dictionary = {}
 var _publishing := false
+var _transitioning := false
+var _native_preparation_actor: Node2D
+var _native_preparation_record: Dictionary = {}
 var _last_preparation_rejection: Dictionary = {}
 
 
@@ -187,7 +190,7 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 			rollback_frame(ticket)
 			return {}
 		var health := actor.get_node("HealthComponent")
-		var record := {"source_id": source_id, "actor": actor, "health": health, "checkpoint": checkpoint, "health_ticket": {}, "actor_ticket": {}, "health_publication": {}, "health_finalized": false}
+		var record := {"source_id": source_id, "actor": actor, "health": health, "checkpoint": checkpoint, "health_ticket": {}, "actor_ticket": {}, "native_actor_frame": false, "actor_token": null, "health_publication": {}, "health_finalized": false}
 		_active.records.append(record)
 		var health_ticket: Dictionary = health.call("begin_frame_signal_transaction", runtime_frame)
 		if health_ticket.is_empty():
@@ -198,6 +201,15 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 
 
 func prepare_frame(ticket: Dictionary) -> bool:
+	if _transitioning:
+		return false
+	_transitioning = true
+	var accepted := _prepare_owned_frame(ticket)
+	_transitioning = false
+	return accepted
+
+
+func _prepare_owned_frame(ticket: Dictionary) -> bool:
 	_last_preparation_rejection.clear()
 	if not _matches(ticket) or bool(_active.prepared):
 		return _reject_preparation("ticket", ticket)
@@ -217,13 +229,28 @@ func prepare_frame(ticket: Dictionary) -> bool:
 		var facing := actor.global_position.direction_to(_player.global_position)
 		if facing.is_zero_approx():
 			facing = Vector2.RIGHT
-		var result: Dictionary = actor.call("prepare_launch_frame", int(ticket.runtime_frame), {
+		var observations := {
 			"runtime_frame": int(ticket.runtime_frame), "source_position": _point(actor.global_position),
 			"target_position": _point(_player.global_position), "facing_direction": _point(facing), "target_id": target_id,
-		})
-		if not bool(result.get("ok", false)) or not result.get("ticket") is Dictionary or not result.get("batch") is Dictionary:
-			return _reject_preparation("actor_prepare", ticket, result)
-		record.actor_ticket = result.ticket.duplicate(true)
+		}
+		var result: Dictionary
+		if _uses_native_actor_frame(actor):
+			_native_preparation_actor = actor
+			_native_preparation_record = record
+			result = actor.call("prepare_native_launch_frame", int(ticket.runtime_frame), observations, self)
+			_native_preparation_actor = null
+			_native_preparation_record = {}
+			if not Contract.exact_fields(result, ["ok", "token", "batch"]) or typeof(result.get("ok")) != TYPE_BOOL or result.get("ok") != true or not result.get("token") is RefCounted or not result.get("batch") is Dictionary:
+				return _reject_preparation("native_actor_prepare", ticket, result)
+			record.native_actor_frame = true
+			record.actor_token = result.token
+			if not actor.owns_native_launch_frame_token(record.actor_token, self):
+				return _reject_preparation("native_actor_token", ticket)
+		else:
+			result = actor.call("prepare_launch_frame", int(ticket.runtime_frame), observations)
+			if not bool(result.get("ok", false)) or not result.get("ticket") is Dictionary or not result.get("batch") is Dictionary:
+				return _reject_preparation("actor_prepare", ticket, result)
+			record.actor_ticket = result.ticket.duplicate(true)
 		batches.append({"hostile_source_id": record.source_id, "batch": result.batch.duplicate(true)})
 	var context := {"run_id": str(_player.call("current_run_id")), "runtime_frame": int(ticket.runtime_frame), "threat_registry": _registry, "actors": _actors.duplicate(), "targets": {target_id: _player}}
 	var prepared: Dictionary = _effects.call("prepare_effects", batches, context)
@@ -240,10 +267,10 @@ func prepare_frame(ticket: Dictionary) -> bool:
 		if not _encounter_authority.can_commit(_active.encounter_ticket):
 			return _reject_preparation("encounter_can_commit", ticket)
 	for record: Dictionary in _active.records:
-		if not bool(record.actor.call("can_commit_launch_frame", record.actor_ticket)):
+		if not _actor_frame_operation(record, &"can_commit"):
 			return _reject_preparation("actor_can_commit", ticket)
 	for record: Dictionary in _active.records:
-		if not bool(record.actor.call("commit_launch_frame", record.actor_ticket)):
+		if not _actor_frame_operation(record, &"commit"):
 			return _reject_preparation("actor_commit", ticket)
 	var committed: Dictionary = _effects.call("commit", _active.effect_ticket)
 	if not bool(committed.get("ok", false)):
@@ -267,7 +294,46 @@ func owns_launch_chaining_context(actor: Node2D, actors: Dictionary, frame: int)
 	return not _active.is_empty() and bool(_active.prepared) and not _publishing and frame == int(_active.ticket.runtime_frame) and actors == _actors and _actors.get(str(actor.get("hostile_source_id"))) == actor and _active.effect_ticket.is_empty()
 
 
+func _uses_native_actor_frame(actor: Node2D) -> bool:
+	return get_script() == HostileFrameBridge and actor.get_script() in [LaunchHostileActor, LaunchBossActor] and actor.has_method("supports_native_launch_frame_protocol") and actor.supports_native_launch_frame_protocol()
+
+
+func owns_native_actor_preparation_context(actor: Node2D, frame: int) -> bool:
+	return _transitioning and _native_preparation_actor == actor and not _native_preparation_record.is_empty() and _native_context_matches(actor, frame) and _active.effect_ticket.is_empty() and not _native_preparation_record.native_actor_frame and _native_preparation_record.actor_token == null and _active.records.any(func(record: Dictionary): return is_same(record, _native_preparation_record) and record.actor == actor)
+
+
+func owns_native_actor_frame_context(actor: Node2D, token: RefCounted, frame: int) -> bool:
+	if token == null or not _native_context_matches(actor, frame):
+		return false
+	for record: Dictionary in _active.records:
+		if record.actor == actor and record.source_id == str(actor.hostile_source_id):
+			return bool(record.native_actor_frame) and is_same(record.actor_token, token)
+	return false
+
+
+func _native_context_matches(actor: Node2D, frame: int) -> bool:
+	if not is_instance_valid(actor) or not is_instance_valid(_player) or _publishing or _active.is_empty() or not _detached.is_empty() or not bool(_active.prepared) or bool(_active.finalized) or frame != int(_active.ticket.runtime_frame) or frame != _last_runtime_frame + 1 or not _uses_native_actor_frame(actor) or _actors.get(str(actor.hostile_source_id)) != actor or not is_same(actor.get("_hostile_threat_registry"), _registry) or actor.get("_hostile_runtime_frame_provider") != Callable(self, "_current_runtime_frame"):
+		return false
+	var state := _actor_frame_boundary(actor)
+	return not state.is_empty() and str(state.run_id) == str(_player.current_run_id()) and int(state.runtime_frame) in [frame - 1, frame]
+
+
+func _actor_frame_operation(record: Dictionary, operation: StringName) -> bool:
+	if bool(record.native_actor_frame):
+		return bool(record.actor.call(str(operation) + "_native_launch_frame", record.actor_token, self))
+	return bool(record.actor.call(str(operation) + "_launch_frame", record.actor_ticket))
+
+
 func prepare_frame_publication(ticket: Dictionary) -> Dictionary:
+	if _transitioning:
+		return {}
+	_transitioning = true
+	var publication := _prepare_owned_frame_publication(ticket)
+	_transitioning = false
+	return publication
+
+
+func _prepare_owned_frame_publication(ticket: Dictionary) -> Dictionary:
 	if not _matches(ticket) or not bool(_active.prepared) or _active.effect_ticket.is_empty() or not bool(_effects.call("can_publish", _active.effect_ticket)):
 		return {}
 	if _encounter_authority != null and not _encounter_authority.can_publish(_active.encounter_ticket):
@@ -277,7 +343,7 @@ func prepare_frame_publication(ticket: Dictionary) -> Dictionary:
 	var publications: Array[Dictionary] = []
 	for record: Dictionary in _active.records:
 		var publication: Dictionary = record.health.call("prepare_frame_signal_publication", record.health_ticket)
-		if publication.is_empty() or not bool(record.actor.call("can_restore_launch_transaction_snapshot", record.checkpoint)) or not bool(record.actor.call("can_publish_launch_frame", record.actor_ticket)):
+		if publication.is_empty() or not bool(record.actor.call("can_restore_launch_transaction_snapshot", record.checkpoint)) or not _actor_frame_operation(record, &"can_publish"):
 			return {}
 		record.health_publication = publication.duplicate(true)
 		publications.append({"hostile_source_id": record.source_id, "publication": publication.duplicate(true)})
@@ -287,19 +353,37 @@ func prepare_frame_publication(ticket: Dictionary) -> Dictionary:
 
 
 func finalize_frame_publication(publication: Dictionary) -> bool:
+	if _transitioning:
+		return false
+	_transitioning = true
+	var accepted := _finalize_owned_frame_publication(publication)
+	_transitioning = false
+	return accepted
+
+
+func _finalize_owned_frame_publication(publication: Dictionary) -> bool:
 	if not _publication_matches(publication) or bool(_active.finalized):
 		return false
 	for record: Dictionary in _active.records:
 		if not bool(record.health.call("finalize_frame_signal_publication", record.health_publication)):
 			return false
 		record.health_finalized = true
-		if not bool(record.actor.call("publish_launch_frame", record.actor_ticket)):
+		if not _actor_frame_operation(record, &"publish"):
 			return false
 	_active.finalized = true
 	return true
 
 
 func seal_frame_publication(publication: Dictionary) -> bool:
+	if _transitioning:
+		return false
+	_transitioning = true
+	var accepted := _seal_owned_frame_publication(publication)
+	_transitioning = false
+	return accepted
+
+
+func _seal_owned_frame_publication(publication: Dictionary) -> bool:
 	if not _publication_matches(publication) or not bool(_active.finalized):
 		return false
 	if _encounter_authority != null and not _encounter_authority.can_publish(_active.encounter_ticket):
@@ -337,8 +421,15 @@ func publish_prepared_frame() -> void:
 
 
 func rollback_frame(ticket: Dictionary) -> bool:
-	if not _matches(ticket):
+	if _transitioning or not _matches(ticket):
 		return false
+	_transitioning = true
+	var restored := _rollback_owned_frame(ticket)
+	_transitioning = false
+	return restored
+
+
+func _rollback_owned_frame(_ticket: Dictionary) -> bool:
 	var restored := true
 	if _encounter_authority != null:
 		if not _active.encounter_ticket.is_empty():
