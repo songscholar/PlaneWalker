@@ -3,7 +3,7 @@
 - Status: Implemented / Focused verified
 - Document Role: Current test-fixture stability fixes discovered by instrumented runtime coverage
 - Authority Level: Below approved full-product completion contract
-- Applies To: Replay backpressure and reward smoke fixtures
+- Applies To: Replay backpressure, reward smoke and Void candidate fallback fixtures
 - Owner: Project integration lead
 - Depends On: [Gameplay completion plan](../superpowers/plans/2026-10-06-gameplay-ui-product-completion.md)
 - Last Verified: 2026-10-06
@@ -55,3 +55,41 @@ ObjectDB or RID leak. The two modified scripts pass `git diff --check` and the
 pinned GDScript AST parser. The complete coverage checkout remains an older
 source identity and still has to finish its scene suite; these focused reports
 do not convert it into a current full-coverage certificate.
+
+## Void Candidate Fallback Fixture
+
+The unchanged complete scene preflight at `d195fe7` finds a third fixture
+failure in `void_burn_snapshot_query_test`. Its direct fallback call passes the
+public `{ok, ticket, batch}` result to `_prepare_native_void_frame`, which
+expects the prepared ticket itself. Missing `runtime_frame` and then missing
+`ok` produce script errors even though the test prints its final PASS marker.
+The strict paired log validator correctly rejects this result. The frozen
+preflight remains unchanged and retains this failure.
+
+The fixed test passes `result.ticket.duplicate(true)` to the fallback and
+checks its internal success response separately from the public result.
+It also compares the complete candidate ticket bytes before and after the
+fallback, retaining the typed state, batch, independently owned arena preview
+and rollback assertions. No production fallback or log rule is weakened.
+
+Ordinary RED and GREEN evidence is retained in
+`build/void-burn-fallback-fixture-red-20261006.log` and
+`build/void-burn-fallback-fixture-green-20261006.log`; the latter passes 1/1 with
+strict paired logs. The first instrumented attempt passes its scene but the
+provider correctly rejects a concurrent original-source change in
+`launch_hostile_actor.gd`. That refused report remains under
+`build/void-burn-fallback-fixture-20261006/green-instrumented/`.
+
+A separate stable Git clone at
+`build/retained-checkout/void-burn-fallback-focused-20261006/` starts at
+`bfa78a06c90ebc5244a7660c5eaa631ef79b63a9` and applies only this test correction.
+Its `build/void-burn-green-instrumented/run.json` reports provider status
+`pass`, one physical runtime report, 1/1 tested scene and verified original
+source digests. Both scene logs pass strict validation. The run report SHA-256
+is `37fe7eb8364953ae01116a11e661a5cdeef29ca3d239993814701c0d0ca1e02e`.
+The changed fixture also passes the pinned GDScript AST parser and
+`git diff --check`. The pinned development, coverage and production-art
+requirements audit reports no known vulnerabilities in
+`build/void-burn-fallback-fixture-20261006/dependency-audit.json`; no dependencies
+change. This focused correction does not certify a complete scene
+suite, full line coverage, FPS, final source or human playtesting.
