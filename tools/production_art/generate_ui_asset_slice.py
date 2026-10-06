@@ -38,6 +38,14 @@ PALETTE = {
 WEAPONS = ("sword", "bow", "gun", "staff", "gauntlets")
 ABILITIES = ("stop", "rewind", "accelerate", "rift")
 EFFECTS = ("weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom")
+CONTENT_SOURCES = {
+    "items": ROOT / "data" / "content_packs" / "base" / "content" / "items.json",
+    "blessings": ROOT / "data" / "content_packs" / "base" / "content" / "blessings.json",
+    "curses": ROOT / "data" / "content_packs" / "base" / "content" / "curses.json",
+    "talents": ROOT / "data" / "content_packs" / "base" / "content" / "talents.json",
+}
+MODE_ART = ("boss_rush", "daily_boss", "authored_challenges", "training", "endless")
+UI_FRAMES = ("panel", "panel_active", "panel_danger", "divider", "badge", "cursor")
 
 LICENSE = """Plane Walker Original UI Art Slice
 
@@ -176,6 +184,77 @@ def effect_frame(effect: str, frame: int) -> Image.Image:
     return image
 
 
+def _content_colors(category: str) -> tuple[tuple[int, int, int, int], tuple[int, int, int, int], tuple[int, int, int, int]]:
+    if category == "items":
+        return PALETTE["patina"], PALETTE["time"], PALETTE["bone"]
+    if category == "blessings":
+        return PALETTE["brass"], PALETTE["bone"], PALETTE["patina"]
+    if category == "curses":
+        return PALETTE["danger"], PALETTE["ember"], PALETTE["void"]
+    if category == "talents":
+        return PALETTE["void"], PALETTE["time"], PALETTE["bone"]
+    if category == "mode_art":
+        return PALETTE["brass"], PALETTE["time"], PALETTE["bone"]
+    return PALETTE["stone"], PALETTE["patina"], PALETTE["bone"]
+
+
+def content_frame(category: str, asset_id: str, frame: int) -> Image.Image:
+    """Render a stable semantic glyph; the id hash chooses a distinct silhouette."""
+    import hashlib as _hashlib
+
+    image, draw = _canvas()
+    primary, accent, highlight = _content_colors(category)
+    digest = _hashlib.sha256(asset_id.encode("utf-8")).digest()
+    shape = digest[0] % 5
+    wobble = (0, 1, 0, -1)[frame]
+    draw.rectangle((3, 3, 28, 28), fill=PALETTE["ink"])
+    draw.rectangle((5, 5, 26, 26), fill=PALETTE["stone"])
+    if shape == 0:
+        draw.polygon([(16, 7 + wobble), (24, 15), (16, 25 - wobble), (8, 15)], fill=primary)
+        draw.polygon([(16, 10 + wobble), (20, 15), (16, 21 - wobble), (12, 15)], fill=accent)
+    elif shape == 1:
+        draw.ellipse((8, 8, 24, 24), fill=primary)
+        draw.rectangle((13, 12 + wobble, 19, 20 + wobble), fill=accent)
+        draw.rectangle((15, 14 + wobble, 17, 18 + wobble), fill=highlight)
+    elif shape == 2:
+        draw.rectangle((8, 10, 24, 22), fill=primary)
+        for x in (11, 15, 19):
+            draw.rectangle((x, 12 + wobble, x + 1, 20 + wobble), fill=accent)
+        draw.rectangle((12, 9, 20, 11), fill=highlight)
+    elif shape == 3:
+        draw.polygon([(7, 12), (11, 8), (14, 11), (18, 7), (21, 11), (25, 9), (24, 22), (8, 22)], fill=primary)
+        draw.rectangle((12, 14 + wobble, 20, 18 + wobble), fill=accent)
+    else:
+        draw.arc((7, 7, 25, 25), 20 + frame * 12, 320 + frame * 12, fill=primary, width=3)
+        draw.rectangle((13, 13 + wobble, 19, 19 + wobble), fill=accent)
+    draw.rectangle((6, 6, 8, 8), fill=highlight)
+    return image
+
+
+def ui_frame(asset_id: str, frame: int) -> Image.Image:
+    image, draw = _canvas()
+    ink, stone, edge = PALETTE["ink"], PALETTE["stone"], PALETTE["edge"]
+    time, brass = PALETTE["time"], PALETTE["brass"]
+    if asset_id == "divider":
+        draw.rectangle((4, 14, 27, 17), fill=ink)
+        draw.rectangle((6, 15, 25, 16), fill=time)
+        draw.rectangle((8 + frame, 12, 10 + frame, 19), fill=brass)
+    elif asset_id == "badge":
+        draw.polygon([(7, 7), (25, 7), (23, 24), (16, 28), (9, 24)], fill=ink)
+        draw.polygon([(9, 9), (23, 9), (21, 22), (16, 25), (11, 22)], fill=brass)
+        draw.rectangle((14, 13, 18, 19), fill=time)
+    elif asset_id == "cursor":
+        draw.polygon([(8, 5), (8, 27), (14, 21), (19, 27), (22, 24), (17, 18), (25, 18)], fill=ink)
+        draw.polygon([(10, 8), (10, 22), (14, 18), (19, 24), (20, 23), (15, 17), (22, 17)], fill=time)
+    else:
+        draw.rectangle((4, 4, 27, 27), fill=ink)
+        draw.rectangle((6, 6, 25, 25), fill=stone)
+        border = time if asset_id == "panel_active" else PALETTE["danger"] if asset_id == "panel_danger" else edge
+        draw.rectangle((7, 7, 24, 24), outline=border, width=2)
+        draw.rectangle((10, 10, 21, 11), fill=brass if frame % 2 == 0 else border)
+    return image
+
+
 def _atlas(frames: Iterable[Image.Image]) -> Image.Image:
     atlas = Image.new("RGBA", (FRAME_SIZE * FRAME_COUNT, FRAME_SIZE), (0, 0, 0, 0))
     for index, frame in enumerate(frames):
@@ -235,6 +314,14 @@ def _existing_inventory(root: Path, family: str, ids: tuple[str, ...], manifest_
     return output
 
 
+def _content_ids() -> dict[str, tuple[str, ...]]:
+    result: dict[str, tuple[str, ...]] = {}
+    for category, path in CONTENT_SOURCES.items():
+        source = json.loads(path.read_text())
+        result[category] = tuple(str(row["id"]) for row in source if isinstance(row, dict) and str(row.get("id", "")))
+    return result
+
+
 def _contact_sheet(destination: Path, generated: list[dict], existing: list[dict]) -> None:
     rows = generated + existing
     thumb_w, thumb_h = 128, 72
@@ -244,7 +331,7 @@ def _contact_sheet(destination: Path, generated: list[dict], existing: list[dict
     for index, row in enumerate(rows):
         x = (index % columns) * thumb_w
         y = (index // columns) * (thumb_h + 18)
-        source = destination / row["path"] if row["kind"] in ("weapons", "time_abilities", "player_effects") else ROOT / "assets" / "production" / row["path"]
+        source = destination / row["path"] if "source_manifest" not in row else ROOT / "assets" / "production" / row["path"]
         image = Image.open(source).convert("RGBA")
         image.thumbnail((thumb_w - 8, thumb_h - 8), Image.Resampling.NEAREST)
         sheet.alpha_composite(image, (x + (thumb_w - image.width) // 2, y + 2))
@@ -258,6 +345,11 @@ def generate(destination: Path = OUTPUT) -> None:
     generated += _write_atlases(destination, "weapons", WEAPONS, weapon_frame)
     generated += _write_atlases(destination, "time_abilities", ABILITIES, ability_frame)
     generated += _write_atlases(destination, "player_effects", EFFECTS, effect_frame)
+    content_ids = _content_ids()
+    for category, ids in content_ids.items():
+        generated += _write_atlases(destination, category, ids, lambda asset_id, frame, family=category: content_frame(family, asset_id, frame))
+    generated += _write_atlases(destination, "mode_art", MODE_ART, lambda asset_id, frame: content_frame("mode_art", asset_id, frame))
+    generated += _write_atlases(destination, "final_ui_frames", UI_FRAMES, ui_frame)
 
     production_root = ROOT / "assets" / "production"
     existing: list[dict] = []
@@ -279,9 +371,17 @@ def generate(destination: Path = OUTPUT) -> None:
             {"id": "weapons", "status": "generated", "scope": "five weapon icons", "assets": [row for row in generated if row["kind"] == "weapons"]},
             {"id": "time_abilities", "status": "generated", "scope": "four time ability icons", "assets": [row for row in generated if row["kind"] == "time_abilities"]},
             {"id": "player_effects", "status": "generated", "scope": "weapon and time projectile/effect strips", "assets": [row for row in generated if row["kind"] == "player_effects"]},
+            {"id": "items", "status": "generated", "scope": "authoritative item icon atlas", "assets": [row for row in generated if row["kind"] == "items"]},
+            {"id": "blessings", "status": "generated", "scope": "authoritative blessing icon atlas", "assets": [row for row in generated if row["kind"] == "blessings"]},
+            {"id": "curses", "status": "generated", "scope": "authoritative curse icon atlas", "assets": [row for row in generated if row["kind"] == "curses"]},
+            {"id": "talents", "status": "generated", "scope": "authoritative talent icon atlas", "assets": [row for row in generated if row["kind"] == "talents"]},
+            {"id": "mode_art", "status": "generated", "scope": "mode entry icon atlas", "assets": [row for row in generated if row["kind"] == "mode_art"]},
+            {"id": "final_ui_frames", "status": "generated", "scope": "panel, divider, badge and cursor frame atlas", "assets": [row for row in generated if row["kind"] == "final_ui_frames"]},
+            {"id": "font", "status": "fallback", "scope": "Godot theme/system font remains the authoritative fallback", "assets": [], "fallback": "system_font"},
         ],
         "contact_sheet": "pixel_asset_contact_sheet.png",
-        "uncompleted_batches": ["items", "blessings", "curses", "talents", "mode_art", "final_ui_frames", "font"],
+        "uncompleted_batches": ["font"],
+        "fallbacks": [{"batch": "font", "source": "Godot theme/system font", "reason": "No bundled font file is required for the current offline slice."}],
     }
     (destination / "pixel_asset_inventory.json").write_text(json.dumps(inventory, indent=2) + "\n")
     (destination / "LICENSE.txt").write_text(LICENSE)

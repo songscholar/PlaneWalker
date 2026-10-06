@@ -7,7 +7,10 @@ const REQUIRED := {
 	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
+	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
+	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor"],
 }
+const CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
 
 
 func _ready() -> void:
@@ -37,4 +40,19 @@ func _run() -> void:
 			suite.assert_equal(FileAccess.get_sha256(path), str(row.get("sha256", "")), "%s/%s hash is stable" % [batch_id, asset_id])
 		var missing := Catalog.asset(StringName(batch_id), &"missing")
 		suite.assert_true(missing.is_empty(), "%s rejects undeclared asset ids" % batch_id)
+	for batch_id: String in CONTENT_BATCHES:
+		var found: Dictionary = {}
+		for batch_value: Variant in inventory.get("batches", []):
+			if batch_value is Dictionary and str(batch_value.get("id", "")) == batch_id:
+				found = (batch_value as Dictionary)
+				break
+		suite.assert_equal(found.get("status", ""), "generated", "%s content icons are generated" % batch_id)
+		suite.assert_true((found.get("assets", []) as Array).size() > 0, "%s content icon batch is non-empty" % batch_id)
+	var font_fallback: Dictionary = {}
+	for batch_value: Variant in inventory.get("batches", []):
+		if batch_value is Dictionary and str(batch_value.get("id", "")) == "font":
+			font_fallback = batch_value
+			break
+	suite.assert_equal(font_fallback.get("status", ""), "fallback", "font batch states its system fallback")
+	suite.assert_equal(font_fallback.get("fallback", ""), "system_font", "font fallback is explicit")
 	suite.finish(get_tree())

@@ -7,7 +7,10 @@ const REQUIRED_GENERATED := {
 	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
+	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
+	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor"],
 }
+const REQUIRED_CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
 
 
 static func load_inventory() -> Dictionary:
@@ -62,4 +65,14 @@ static func validate() -> Dictionary:
 				errors.append("asset hash mismatch: %s" % path)
 			if int(value.get("frame_width", 0)) != 32 or int(value.get("frame_height", 0)) != 32:
 				errors.append("asset frame size is not 32x32: %s" % path)
+	for batch_id: String in REQUIRED_CONTENT_BATCHES:
+		var found := false
+		for batch_value: Variant in inventory.get("batches", []):
+			if batch_value is Dictionary and str(batch_value.get("id", "")) == batch_id:
+				found = true
+				if str(batch_value.get("status", "")) != "generated" or (batch_value.get("assets", []) as Array).is_empty():
+					errors.append("content batch is not generated: %s" % batch_id)
+				break
+		if not found:
+			errors.append("missing content batch: %s" % batch_id)
 	return {"ok": errors.is_empty(), "errors": errors, "inventory": inventory}
