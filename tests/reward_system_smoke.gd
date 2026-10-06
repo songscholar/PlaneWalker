@@ -344,6 +344,11 @@ func _run_bow_weapon_check() -> void:
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var enemy_health: Node = enemy.get_node("HealthComponent")
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
+	# Keep the target alive long enough to observe the non-lethal arrow result.
+	# EnemyBase queues defeated targets for deletion, so a default-health target
+	# can disappear between the hit and the assertion below.
+	enemy_health.max_hp = 1000.0
+	enemy_health.current_hp = 1000.0
 
 	var short_started: bool = room_player.try_action(&"ranged_attack")
 	for _frame: int in range(8):

@@ -33,11 +33,13 @@ func _run() -> void:
 		suite.assert_true(player.advance_action_frame(), "native frame reaches the first background batch")
 		await get_tree().physics_frame
 	var blocked := false
-	for _poll: int in range(600):
+	var wait_deadline_usec := Time.get_ticks_usec() + 8_000_000
+	while Time.get_ticks_usec() < wait_deadline_usec:
 		if entered.try_wait():
 			blocked = true
 			break
 		await get_tree().process_frame
+		await get_tree().create_timer(0.001, true, false, true).timeout
 	suite.assert_true(blocked and recorder.snapshot().pending_write, "worker reaches the physical promotion gate")
 	var rejected: Array[StringName] = []
 	recorder.rejected.connect(func(code: StringName): rejected.append(code))
