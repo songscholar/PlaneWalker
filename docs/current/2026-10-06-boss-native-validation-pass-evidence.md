@@ -53,8 +53,10 @@ contains exactly 12 expected cold/warm call-count assertion failures. Its
 behavioral assertions pass. Candidate GREEN is 1/1 under
 `build/performance-native-validation/green/`. Initial fixture parse failures
 and the first clean-checkout import's missing generated translations are
-retained separately and are not classified as the behavioral RED. The final
-baseline import has clean paired logs.
+retained separately and are not classified as the behavioral RED. A second
+baseline editor import still reports missing UI chrome assets referenced by
+that revision; its complete import gate remains failed. The isolated focused
+RED itself has only the 12 expected count failures and no script/leak failure.
 
 The following existing scene regressions are GREEN with strict paired stdout
 and Godot engine log validation in `build/performance-native-validation/`:
