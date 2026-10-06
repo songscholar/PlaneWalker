@@ -861,6 +861,12 @@ static func profile_digest(profile: Dictionary) -> String:
 
 
 static func validate_full_player_identity(value: Dictionary) -> Dictionary:
+	if not replay_value_is_safe(value):
+		return {}
+	return _validate_full_player_identity_after_safety(value)
+
+
+static func _validate_full_player_identity_after_safety(value: Dictionary) -> Dictionary:
 	var expected_fields := FULL_PLAYER_IDENTITY_FIELDS.duplicate()
 	if value.has("meta_projection_digest"):
 		if not _is_sha256(value.meta_projection_digest) or value.get("character_profile_id") == "wanderer_m1_v1":
@@ -873,7 +879,6 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 			return {}
 	if (
 		not _has_exact_fields_static(value, expected_fields)
-		or not replay_value_is_safe(value)
 		or not _is_non_empty_string(value.get("run_id"))
 		or str(value["run_id"]).length() > 256
 		or not _is_positive_integer(value.get("owner_character_generation"))
@@ -1057,7 +1062,7 @@ static func validate_full_player_snapshot(
 	var identity_value: Variant = snapshot.get("identity")
 	if not identity_value is Dictionary:
 		return _failure(&"FULL_PLAYER_SNAPSHOT_IDENTITY_INVALID")
-	var identity := validate_full_player_identity(identity_value as Dictionary)
+	var identity := _validate_full_player_identity_after_safety(identity_value as Dictionary)
 	if identity.is_empty() or identity != expected_identity:
 		return _failure(&"FULL_PLAYER_SNAPSHOT_IDENTITY_MISMATCH")
 	for dictionary_field: String in [
@@ -1118,7 +1123,7 @@ static func validate_full_player_snapshot(
 		var reward_effect_value: Variant = snapshot.get("reward_effect_state")
 		if (
 			not reward_effect_value is Dictionary
-			or not validate_full_player_reward_effect_state(
+			or not _validate_full_player_reward_effect_state_after_safety(
 				reward_effect_value as Dictionary
 			)
 		):
@@ -1150,7 +1155,7 @@ static func validate_full_player_snapshot(
 		var live_talent_value: Variant = snapshot.get("live_talent_state")
 		if (
 			not live_talent_value is Dictionary
-			or not validate_full_player_live_talent_state(
+			or not _validate_full_player_live_talent_state_after_safety(
 				live_talent_value as Dictionary,
 				identity
 			)
@@ -1277,9 +1282,14 @@ static func validate_full_player_active_item_state(
 
 
 static func validate_full_player_reward_effect_state(value: Dictionary) -> bool:
+	if not replay_value_is_safe(value):
+		return false
+	return _validate_full_player_reward_effect_state_after_safety(value)
+
+
+static func _validate_full_player_reward_effect_state_after_safety(value: Dictionary) -> bool:
 	if (
-		not replay_value_is_safe(value)
-		or not _has_exact_fields_static(value, FULL_PLAYER_REWARD_EFFECT_FIELDS)
+		not _has_exact_fields_static(value, FULL_PLAYER_REWARD_EFFECT_FIELDS)
 		or typeof(value.get("schema_version")) != TYPE_INT
 		or int(value["schema_version"]) != 1
 		or not value.get("stats") is Dictionary
@@ -1425,9 +1435,17 @@ static func validate_full_player_live_talent_state(
 	value: Dictionary,
 	identity: Dictionary
 ) -> bool:
+	if not replay_value_is_safe(value):
+		return false
+	return _validate_full_player_live_talent_state_after_safety(value, identity)
+
+
+static func _validate_full_player_live_talent_state_after_safety(
+	value: Dictionary,
+	identity: Dictionary
+) -> bool:
 	if (
-		not replay_value_is_safe(value)
-		or not _has_exact_fields_static(value, FULL_PLAYER_LIVE_TALENT_FIELDS)
+		not _has_exact_fields_static(value, FULL_PLAYER_LIVE_TALENT_FIELDS)
 		or typeof(value.get("schema_version")) != TYPE_INT
 		or int(value["schema_version"]) != 1
 		or not value.get("selected_talent_ids") is Array
@@ -1436,8 +1454,8 @@ static func validate_full_player_live_talent_state(
 		or not _is_sha256(value.get("definitions_digest"))
 		or not _is_sha256(value.get("modifier_digest"))
 		or str(value["definitions_digest"])
-			!= value_digest(value["talent_definitions"])
-		or str(value["modifier_digest"]) != value_digest(value["modifiers"])
+			!= _canonical_value(value["talent_definitions"]).sha256_text()
+		or str(value["modifier_digest"]) != _canonical_value(value["modifiers"]).sha256_text()
 		or not identity.get("character_talent_ids") is Array
 		or not _is_non_empty_string(identity.get("character_id"))
 	):
