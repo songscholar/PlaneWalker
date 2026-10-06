@@ -103,6 +103,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Mode Cohort Rendered Performance](current/2026-10-06-mode-cohort-rendered-performance-evidence.md) | Current frozen production Main frame costs, physical source manifest and paired-log evidence | Measured / 60 FPS and soak gates open |
 | [Native Renderer Comparison](current/2026-10-06-native-renderer-comparison-evidence.md) | Same-source Metal/OpenGL measurement on macOS, actual backend metadata and retained CPU/frame costs | Measured / CPU optimization and 60 FPS gates open |
 | [Native CPU Profile Diagnostic](current/2026-10-06-native-cpu-profile-diagnostic-evidence.md) | Instrumented fixed-frame call attribution for recorder and transaction hot paths | Diagnostic Verified / Recorder on-off measurement pending |
+| [Native Recorder Observation On/Off](current/2026-10-06-native-recorder-observation-on-off-evidence.md) | Same-source Metal phase-two comparison isolating synchronous replay observation cost | Diagnostic Verified / Production recorder optimization pending |
 | [Boss Action Validator Evidence](current/2026-10-06-boss-action-validator-evidence.md) | Boss 恢复动作模板的单次权威校验与五 Boss 回归证据 | Focused Verified / Full gameplay pending |
 | [Native Hostile Cache Evidence](current/2026-10-06-native-hostile-cache-retention-evidence.md) | 有界目录与动作缓存、原生回归及冻结前后性能对照 | Focused Verified / Performance certification pending |
 | [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |
