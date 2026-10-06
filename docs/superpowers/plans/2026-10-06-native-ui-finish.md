@@ -18,6 +18,11 @@
 
 **Tech Stack:** Godot 4.6.1 compatibility renderer, native Control/Theme/AtlasTexture/StyleBoxTexture/Tween, FocusCoordinator, AccessibilityRuntime, existing Pillow 12.3.0 tooling, Python unittest and the native scene-test runner.
 
+Read-only preparation, verified upstream font identities and the complete
+49-state ownership map are retained in the
+[UI preparation audit](../../current/2026-10-06-native-ui-preparation-evidence.md).
+That record does not open the gameplay gate or certify UI implementation.
+
 ## Global Constraints
 
 - Do not start runtime, resource-generator, asset or test implementation until the integration lead records the gameplay milestone passing and announces the UI phase.
@@ -321,6 +326,13 @@ art identities; RunEndOverlay still owns one terminal presentation per run,
 settlement retry and Profile return. Credits consume actual bundled license
 manifest entries rather than an invented contributor list.
 
+Credits already use `NarrativeViewModel.credits` and
+`NarrativeFlowCoordinator.show_selected_credits`/`resume_selected_credits`.
+Preserve the authored `ending.credits_key`, `mode == "credits"`,
+`close_available == false`, existing skip action and chosen-ending receipt.
+Task 6 finishes that presentation and adds actual license entries; it does
+not replace or bypass the existing ending/credits completion flow.
+
 - [ ] Step 1: Add failing tests for event art and distinct pending/reward/result state, portrait/dialogue composition, `close_available`, readable results/earned glyphs, save-retry command and credits source truth.
 
 ```gdscript
@@ -351,6 +363,12 @@ AccessibilityRuntime live hooks and the existing input label codec. Keep
 existing training play/pause/reset/back raster icons and successful-frame
 observer facts. New categories are presentation tabs, not new save settings.
 
+The current remap service already swaps conflicting bindings. The panel
+shows `UI_BINDING_CONFLICT_SWAPPED` after a successful `SWAPPED` result,
+closes capture and recovers focus. Retain that policy and status in the
+`remap_conflict` visual fixture; no new conflict-confirmation command or
+binding mutation policy is implied by the presentation work.
+
 - [ ] Step 1: Add failing tests for category layout, themed controls and device glyphs, reduced-motion live behavior, text-scale reflow, visible remap conflicts, tutorial progress, and successful focus return after settings close.
 
 ```gdscript
@@ -363,8 +381,8 @@ suite.assert_true(panel.back_button.is_visible_in_tree(), "large text retains a 
 ```
 
 - [ ] Step 2: Run `./tools/run_tests.sh --filter settings_onboarding_finish`; expected RED: grouped native layout/glyph behavior absent.
-- [ ] Step 3: Compose pause commands/build tab, setting categories, native sliders/checkboxes/option sets, device glyphs, focused remap capture/conflict and font preview. Finish lesson checklist/progress/hint and training selector layout. Apply Theme before accessibility scaling; localize all new labels in shipping CSV, never expose raw implementation ids in player copy.
-- [ ] Step 4: Run new scene, `./tools/run_tests.sh --filter accessibility_settings`, `./tools/run_tests.sh --filter input_remap`, `./tools/run_tests.sh --filter tutorial`, `./tools/run_tests.sh --filter training`, and current controller flows. Retain mapped keyboard/mouse/joypad interactions, capture/conflict cancel, live language change, cold setting recovery and assist disclosure.
+- [ ] Step 3: Compose pause commands/build tab, setting categories, native sliders/checkboxes/option sets, device glyphs, focused remap capture, visible existing conflict-swap status and font preview. Finish lesson checklist/progress/hint and training selector layout. Apply Theme before accessibility scaling; localize all new labels in shipping CSV, never expose raw implementation ids in player copy.
+- [ ] Step 4: Run new scene, `./tools/run_tests.sh --filter accessibility_settings`, `./tools/run_tests.sh --filter input_remap`, `./tools/run_tests.sh --filter tutorial`, `./tools/run_tests.sh --filter training`, and current controller flows. Retain mapped keyboard/mouse/joypad interactions, capture cancel, successful conflict swap and focus recovery, live language change, cold setting recovery and assist disclosure.
 - [ ] Step 5: Commit reviewed settings/onboarding/training paths as `ui: finish accessible settings and onboarding surfaces`.
 
 ## Task 8: Challenge Modes and Rewards
@@ -538,7 +556,8 @@ Current code dependency observations are explicit:
 - The four mode coordinators build separate `_hud` controls and update live text in `_process`; those presentation sections belong to Task 8, with native flow semantics held fixed.
 - `scripts/ui/dungeon_panel_view.gd` owns generic chrome and public `panel_root`, `rows_container`, `scroll`, `footer`, `back_button`; Tasks 4-9 depend on preserving these until scoped adapters are verified.
 - Daily and authored panel views add containers relative to `scroll.get_parent()`; shared chrome changes in Task 2 must retain that structure or provide the tested equivalent before page tasks branch.
-- `scripts/hub/hub_panel_view.gd` owns share drafts, footer controls, `_actions` and epoch callbacks; new page builders consume these rather than install a second command owner.
+- `scripts/ui/hub_panel_view.gd` owns share drafts, footer controls, `_actions` and epoch callbacks; new page builders consume these rather than install a second command owner.
+- `scripts/training/training_flow_coordinator.gd` owns training focus entry/return and successful-frame observation. `scripts/onboarding/tutorial_flow_coordinator.gd` owns tutorial transitions; Task 7 preserves both production flows.
 - `scripts/replay/player_replay_library_panel.gd` already displays a genuine `SubViewport` via ReplayPicture; Task 9 improves layout and controls while preserving playback authenticity.
 - Existing authenticated actor/hub/room/cosmetic bitmaps can supply previews; no shipping font bundle, shared Theme or complete first-party UI icon atlas currently exists.
 

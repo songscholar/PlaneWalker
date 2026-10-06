@@ -1,6 +1,6 @@
 # Native Release Runtime Probe Evidence
 
-- Status: Recording Verified / Monitoring and frame budget failed
+- Status: Recording And Monitoring Verified / Frame budget failed
 - Document Role: Current retained official release invocation and measurement evidence
 - Authority Level: Below approved full-product completion contract
 - Applies To: Packaged macOS release performance harness and measurement tooling
@@ -106,15 +106,18 @@ The tool correctly refuses the otherwise successful recording report.
 
 ## Open Acceptance
 
-The live PID tool repair below is independently contract-verified. Its actual
-packaged release measurement remains pending and must use a new evidence
-directory. Do not replace or mark the failed original report passing. The
-16.667-ms frame budget independently fails. Concurrent native matrix and frozen
-validation activity overlaps the original run, so editor/release differences
-do not isolate a production optimization. The later Effects and owned-token
-changes are not in that production source. Rendered saturation, sustained
-recording, the 45-minute soak, memory acceptance, finished UI and human
-playtests remain open.
+The live PID tool repair below is independently contract-verified and the new
+combined package now has real RSS and exact recording evidence. The original
+failed report remains unchanged. The combined run is a public-fallback baseline:
+at `8011d1b` the production Bridge Script is not admitted by the native-token
+checks. The subsequent [production integration milestone](2026-10-06-native-production-frame-integration-evidence.md)
+verifies actual Main native admission, but its native-enabled performance
+measurement remains pending.
+Both the old and combined runs fail the
+16.667-ms frame budget. Concurrent frozen validation activity overlaps these
+runs, so their differences do not isolate a production optimization. Rendered
+saturation, sustained recording, the 45-minute soak, memory acceptance,
+finished UI and human playtests remain open.
 
 ## PID Bootstrap Tool Repair
 
@@ -158,3 +161,151 @@ and reports no remaining actionable finding:
 This is tool acceptance only. No new package was exported or measured during
 this repair, and no FPS, release-memory, rendered, soak, full native matrix,
 unassisted-play or human claim follows from these contract results.
+
+## Combined Commit Public-Fallback Release 600
+
+After the repair was committed as `8011d1bfa86c8cb1fbc266226ba67a324249ee6e`,
+the combined diagnostic checkout is retained at
+`build/retained-checkout/native-release-combined-8011d1b-20261006/`.
+It includes owned-token commit `86aef36` and the PID repair. It is a detached
+worktree of that exact commit with no production overlay. The sole tracked
+override changes `project.godot` from production Main to the existing probe
+main scene, which instantiates production Main. All 411 production
+`scripts`/`autoload` GDScript files remain unchanged before and after execution;
+their aggregate is
+`76bd12d806174d13d8747c503033fb3ccf0e11aabc5014390ada856f68637896`.
+
+This source contains the token implementation but production Main does not
+exercise it. `NativeLaunchEncounterDriver` constructs its embedded
+`ProductionBridge` Script, while `_uses_native_actor_frame` requires exact
+`HostileFrameBridge` Script identity and Actor `_native_frame_bridge_binding`
+requires the same identity. The embedded Script therefore takes the original
+public ticket fallback. This run is an actual public-fallback baseline, not a
+measurement of the token path after production activation. Production native
+Bridge integration is verified by the later separately retained milestone;
+an actual admitted-token measurement remains pending.
+
+The first import exits zero but is explicitly not strict clean: both original
+logs have 88 setup diagnostics, all missing/generated translation resource
+errors. The raw pair and `build/release-pid-provenance/import-1-classification.json`
+remain retained. The second import and official `macOS Release` export both
+exit zero and pass strict independent paired scans. These logs are under
+`build/release-pid-export-logs/`; no first-import error was suppressed or
+misclassified as clean.
+
+The self-contained official editor executable has SHA-256
+`ad304ee206ac9a0ab8407365e767ec33fe78d9455ff9dcace207c053e2651667`.
+The exported `build/macos/PlaneWalkerPidBound.app` has the same official release
+executable and plist hashes recorded above, while its PCK hash is
+`7cecfc3cadf405ee1814ef27beae67a966e1a961e21e1e654a2bbb097db85740`.
+The runtime's actual command, exact bundle autoload binding, all three hashes
+and layout remain stable. `build/release-pid-provenance/source-before.json`
+and `export-receipt.json` retain the source, override, toolchain and export
+chain separately; a `harness_only` runtime manifest alone does not authenticate
+the source inside a PCK. This diagnostic package is not a playable distribution.
+
+`build/floor4-phase2-release-combined-late-600/report.json` has SHA-256
+`8261deb7fd9b2f344725807d515241c46cde453943a75c2d02dd5c1d0cb4d040`.
+Its source manifest has SHA-256
+`38edd5d1cc060be69f34a6f8d8e9893e57a0be00eeacfd0d97b3abf36e444f3b`.
+The process exits zero and its final stdout/engine pair is strict clean. Real
+Sword admission takes 2,501 frames, followed by 600 accepted consecutive
+frames from 2,502 through 3,101. Both native and retained measurement status
+are `pass`, with no custom failure. That status certifies these measurement
+contracts, not the separate gameplay performance gate.
+
+The physical tape has 601 observations, honestly `INTERRUPTED`, with no
+recording failure. Fresh complete typed first/last readback is exact, with the
+same historical endpoint hashes recorded above. Retention takes 8.030 seconds.
+Author post-run verification revalidates the report, paired logs, fixed source,
+bundle binding and package hashes in `build/release-pid-provenance/post-run-verification.json`.
+Independent read-only review repeats report/schema validation, exact PID and
+RSS binding, all 411 source hashes before/after, the package's three hashes
+and sole autoload layout, and all final paired scans. Its separate
+`build/independent-release-combined-8011d1b/physical_endpoint_check.gd` uses
+real Godot to read the original 601-observation `INTERRUPTED` archive without
+mutating it: sequence 1/600 has integer Player frames 2,502/3,101 and complete
+`var_to_bytes` hashes equal the historical endpoints. The retained
+`physical-endpoints.stdout.log`/`physical-endpoints.godot.log` pair is strict
+clean and exits zero. It does not rerun combat or modify the source, report or
+archive. This independently verifies measurement and physical recording,
+not token activation or the performance budget.
+
+The bootstrap file, sole final stdout announcement, native report and RSS
+sampler all bind PID `57691`. A retained live observation shows both logs still
+at zero bytes while the bootstrap already permits a real `ps.rss_kib` memory
+read. The final sampler has 1,262 valid observations and one failed process
+read; peak RSS is 1,060,651,008 bytes (1,011.516 MiB). This is the whole native
+process after bootstrap, including Hub, phase admission, measured frames and
+retention; it is not an isolated 600-frame memory bound or memory-budget pass.
+The release static monitor remains explicitly unavailable: observed zero,
+`debug_build=false`, reason `release_build`.
+
+| Combined Release Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 39.643 ms | 51.547 ms | 135.564 ms |
+| Same-frame Player and Host | 40.984 ms | 53.341 ms | 138.753 ms |
+| Same-frame wall including waits and observer | 49.117 ms | 64.665 ms | 155.815 ms |
+
+Ten native seconds take 29.471 measured wall seconds. Peaks remain one actor,
+six threats and three zones; the fixture does not establish saturation. Five
+concurrent frozen `replay-codec-immutable-4a8fc6f` Godot workers consume about
+99 percent CPU each in the retained process snapshot. No controlled net CPU
+or editor/release improvement follows from these runs. Recording and actual
+monitoring pass; the 16.667-ms frame budget fails, `fps_certified=false`,
+`unassisted_victory=false`, and `human_playtests=0`.
+
+## Combined Commit Public-Fallback Editor 600
+
+The completed uninstrumented editor run is retained in
+`build/retained-checkout/native-editor-combined-8011d1b-20261006/`, a clean
+detached checkout of the same `8011d1b` commit. Its tracked worktree is clean;
+the existing probe scene is selected directly by the actual command rather
+than through a project-setting override. The manifest identifies the executed
+source project, `/Applications/Godot.app/Contents/MacOS/Godot`, the same
+official editor executable hash recorded above, and 411 runtime source files
+with aggregate
+`76bd12d806174d13d8747c503033fb3ccf0e11aabc5014390ada856f68637896`.
+This is the same historical public-fallback source, not the later
+native-enabled production integration.
+
+The report is `build/floor4-phase2-editor-combined-late-600/report.json`,
+SHA-256 `dac4c003f2a6ab5ac08fbe63a583182c3abb8801626b102985aedb759eac3c75`;
+its `source-manifest.json` has SHA-256
+`3a35655cc6b961a0b92015d6ad30fbd539a841f7df42c4dd7b5933a014bf7e8c`.
+It exits zero, accepts all 600 consecutive frames 2,502-3,101 after 2,501
+admission frames and has no custom failure. Both status fields are `pass`.
+The first-import raw logs retain 88 diagnostics each and are not claimed
+strict clean. The second-import and final measurement stdout/engine pairs
+independently pass the strict runtime-log validator.
+
+Read-only post-run validation repeats the actual report validator, compares
+all 411 current runtime hashes to the manifest, checks the editor executable
+hash, and requires the report's source identity to equal the manifest's
+retained source identity. Independently recollecting the physical bootstrap
+file and sole final stdout announcement reproduces the exact saved binding.
+PID `61695` agrees across bootstrap, stdout, native report and RSS sampler.
+No source, report, archive or process state was mutated by that review.
+
+The physical recording retains 601 observations with status `INTERRUPTED`,
+no recording failure, and exact typed first/last readback with the same
+historical endpoint hashes above. Retention takes 8.909 seconds. Real RSS has
+1,599 valid samples, zero failed reads and a peak of 1,309,032,448 bytes over
+the whole post-bootstrap process. Unlike the release build, the editor's
+native static monitor is available, with raw peak 726,327,573 bytes. Neither
+observation is an isolated 600-frame memory acceptance or memory-budget pass.
+
+| Combined Editor Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 52.900 ms | 76.035 ms | 113.128 ms |
+| Same-frame Player and Host | 54.673 ms | 78.873 ms | 114.119 ms |
+| Same-frame wall including waits and observer | 64.873 ms | 91.804 ms | 152.464 ms |
+
+Ten native seconds take 38.925 measured wall seconds. The same one-actor,
+six-threat, three-zone scene is not saturation evidence. Concurrent frozen
+validation activity overlapped the editor/release runs, so their differences
+are not a controlled source or runtime optimization comparison. Recording,
+source stability and monitoring contracts pass; the 16.667-ms frame budget
+fails. Rendered/FPS, sustained recording, soak, UI and human certification
+remain absent. A new frozen native-enabled editor/release measurement must
+retain its own source commit and reports after production integration.

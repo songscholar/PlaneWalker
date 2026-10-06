@@ -1,6 +1,6 @@
 # Native Owned Frame Token Evidence
 
-- Status: Implemented / Current
+- Status: Focused Verified / Native-enabled performance pending
 - Document Role: Current focused native Actor frame ownership evidence
 - Authority Level: Below approved full-product completion contract
 - Applies To: Canonical Actor/Boss preparation, compensation and publication through HostileFrameBridge
@@ -20,8 +20,9 @@ including exact field order, Variant types and actual burn source/attacker
 Nodes. Native preparation returns only an empty RefCounted marker and detached
 batch. The marker has no state, owner, frame, Dictionary or Array fields.
 
-Only the actual canonical HostileFrameBridge and HostileActor/BossActor Script
-objects use this protocol. Matching resource-path strings is insufficient;
+At owned-token commit `86aef36`, only the actual canonical HostileFrameBridge
+and HostileActor/BossActor Script objects use this protocol. Matching
+resource-path strings is insufficient;
 the fixture exercises distinct Scripts taking over the canonical paths.
 Summon, ordinary-copy and unknown Actor/Bridge subclasses retain their public
 preparation path, including real lease and retirement behavior. Malformed
@@ -195,15 +196,67 @@ entire changing workspace or an uninstrumented full-runtime manifest.
 The unchanged development, production-art and coverage requirements pass the
 combined project `pip-audit` with no known vulnerabilities.
 
-## Measurement Still Required
+## Integrated Measurement And Remaining Gates
 
-The native path no longer exports or Bridge-retains the full public Actor
-ticket, and Boss postprocessing no longer recopies that complete history.
+In the focused canonical-Bridge fixtures, the native path no longer exports
+or Bridge-retains the full public Actor ticket, and Boss postprocessing no
+longer recopies that complete history.
 Required pre-weapon compensation checkpoints, runtime snapshots, strict
 restoration and detached small Effects batches remain. Removed source copies
 and successful correctness tests do not establish net CPU benefit or a frame
-budget. Root coordinates an uninstrumented frozen-source late native probe
-after this focused slice is retained. The prior native 600-frame evidence still
-fails the 16.667-ms complete-frame budget. Rendered throughput, sustained
-recording, saturation, the 45-minute soak, complete UI and human playtesting
-remain open gates.
+budget. The prior native 600-frame evidence fails the 16.667-ms complete-frame
+budget. Rendered throughput, sustained recording, saturation, the 45-minute
+soak, complete UI and human playtesting remain open gates.
+
+The final owned-token slice is committed as `86aef36`, followed by the
+runtime PID bootstrap repair at combined commit
+`8011d1bfa86c8cb1fbc266226ba67a324249ee6e`. The new detached diagnostic worktree
+`build/retained-checkout/native-release-combined-8011d1b-20261006/` has no
+production overlay and only the disclosed probe main-scene override.
+Its 411 production GDScript files retain aggregate
+`76bd12d806174d13d8747c503033fb3ccf0e11aabc5014390ada856f68637896`.
+The first import's generated-translation setup errors remain classified;
+the final import, export and measurement paired logs are strict clean.
+
+This combined source has not activated native tokens in actual Main.
+`NativeLaunchEncounterDriver` constructs its embedded `ProductionBridge`
+Script. The Bridge's `_uses_native_actor_frame` and Actor's
+`_native_frame_bridge_binding` require exact base `HostileFrameBridge` Script
+identity, so the embedded production Script takes the original public ticket
+fallback. The release and editor 600-frame observations from `8011d1b` are
+public-fallback baselines. They must not be described as measurements of
+activated-token production behavior. The subsequent production binding fix
+and meaningful actual-Main RED/GREEN are retained separately in the
+[production integration evidence](2026-10-06-native-production-frame-integration-evidence.md).
+That focused milestone admits the exact canonical Production Script, verifies
+native preparation in actual Main fresh and physically cold-restored
+encounters, and passes the final targeted regressions and fresh-cache import.
+Native-enabled 600-frame performance measurement remains pending; no result
+from the earlier `8011d1b` source is reattributed to the new integration.
+
+The actual official release run accepts all 600 late phase-two frames and
+physically retains 601 `INTERRUPTED` observations with exact typed endpoint
+readback and historical first/last hashes. Report SHA-256 is
+`8261deb7fd9b2f344725807d515241c46cde453943a75c2d02dd5c1d0cb4d040`.
+Runtime PID `57691` agrees across bootstrap file, sole final stdout, report
+and RSS sampler. Real RSS has 1,262 valid samples, one failed read and
+1,060,651,008 peak bytes over the whole post-bootstrap process. Source,
+package hashes and bundle binding remain stable. Full provenance and author
+post-run validation are recorded in the [release probe evidence](2026-10-06-native-release-probe-evidence.md).
+Independent read-only review repeats schema/PID/RSS/source/package/log
+verification and separately uses real Godot to read the original typed
+sequence 1/600 endpoints, with exact integer frames and historical complete
+byte hashes. Its strict clean probe logs are retained in
+`build/independent-release-combined-8011d1b/`. It does not rerun combat or
+mutate the archive, and certifies no production token activation.
+
+Same-frame Player/Host work averages 40.984 ms, with 53.341-ms p95 and
+138.753-ms maximum. Complete wall frames average 49.117 ms, with 64.665-ms p95
+and 155.815-ms maximum. Ten native seconds take 29.471 measured wall seconds.
+These values fail the 16.667-ms frame budget. Five concurrent frozen
+validation workers overlap this run; comparing it with the earlier source
+cannot establish isolated net CPU benefit from the token change. This closes
+the public-fallback recording/monitoring measurement. The subsequent focused
+production integration verifies native token admission; complete gameplay
+performance, rendered saturation,
+sustained recording, soak, UI and human acceptance remain open.

@@ -8,7 +8,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
-- Last Verified: 2026-10-05
+- Last Verified: 2026-10-06
 - Contract References: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 
 ## 当前执行结论
@@ -116,9 +116,12 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Effects Snapshot Copy Plan](current/2026-10-06-native-effects-snapshot-copy-plan.md) | 保留快照字段位置和完整子状态，消除被覆盖分支的重复复制 | Active / Current |
 | [Native Effects Snapshot Copy Evidence](current/2026-10-06-native-effects-snapshot-copy-evidence.md) | 原生事务和历史快照保持逐字节一致，被覆盖子状态复制从 21 次降为 0 次 | Focused Verified / Integrated performance pending |
 | [Native Owned Frame Token Plan](current/2026-10-06-native-owned-frame-token-plan.md) | 原生 Actor 私有候选与精确身份令牌，保留公开票据和原有补偿边界 | Active / Current |
-| [Native Owned Frame Token Evidence](current/2026-10-06-native-owned-frame-token-evidence.md) | 原生令牌身份、公开票据兼容、回滚与发布回归，整合测量待完成 | Implemented / Current |
+| [Native Owned Frame Token Evidence](current/2026-10-06-native-owned-frame-token-evidence.md) | 令牌与实际 Main 新局、冷读档接入专项通过；原生路径性能重测待完成 | Focused Verified / Native-enabled performance pending |
+| [Native Production Frame Integration Plan](current/2026-10-06-native-production-frame-integration-plan.md) | 正式 Bridge 精确 Script 接入、实际 Main 新局与冷恢复令牌验收 | Approved / Current |
+| [Native Production Frame Integration Evidence](current/2026-10-06-native-production-frame-integration-evidence.md) | 正式 Main 新局与物理冷读档均采用原生候选，独立 RED/GREEN、十一项邻域及空缓存导入通过 | Implemented / Focused regressions verified |
+| [Native Owned Hotpath Diagnostic Plan](current/2026-10-06-native-owned-hotpath-diagnostic-plan.md) | 冻结 Main 热点、真实 native/public 调用数与完整快照编码归因 | Approved / Current |
 | [Native Release Runtime Probe Plan](current/2026-10-06-native-release-probe-plan.md) | 官方发行运行时打包测量、真实内存可用性与执行身份 | Approved / Current |
-| [Native Release Runtime Probe Evidence](current/2026-10-06-native-release-probe-evidence.md) | 发行包真实 600 帧录制成功，RSS 采样入口与帧预算仍未通过 | Recording Verified / Monitoring and frame budget failed |
+| [Native Release Runtime Probe Evidence](current/2026-10-06-native-release-probe-evidence.md) | 公开票据 fallback 基线的 600 帧录制与 PID/RSS 绑定通过；历史失败保留，帧预算未达标 | Recording And Monitoring Verified / Frame budget failed |
 | [Time Loadout Inheritance Evidence](current/2026-10-06-time-loadout-inheritance-evidence.md) | 实际暂停继承、选择冻结及恢复自动计时回归 | Focused Verified / Integrated clean validation pending |
 | [Native Action Validation Template Plan](current/2026-10-06-native-action-validation-template-plan.md) | 动作完整静态校验、有界不可变配置模板和独立可变恢复 | Approved / Current |
 | [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
@@ -152,7 +155,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
-| [Native UI Finish Plan](superpowers/plans/2026-10-06-native-ui-finish.md) | 玩法认证之后实施 HUD、据点与全部外围界面打磨 | Active / Current |
+| [Native UI Finish Plan](superpowers/plans/2026-10-06-native-ui-finish.md) | HUD、据点与全部外围界面打磨方案已准备，等待玩法认证后实施 | Prepared / Not started |
+| [Native UI Preparation Audit](current/2026-10-06-native-ui-preparation-evidence.md) | 官方字体版本、哈希和授权读证，49 个界面的现有契约、焦点入口与并行责任边界 | Prepared / UI implementation not started |
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
 | [Dungeon Probe Encounter Design](superpowers/specs/2026-10-05-dungeon-probe-native-encounter-design.md) | 合成模拟复用正式遭遇状态机、固定帧与生成及死亡回执 | Approved / Current authority |
 | [Dungeon Probe Encounter Plan](superpowers/plans/2026-10-05-dungeon-probe-native-encounter.md) | 守卫事件回归、工具适配器和三十种子报告修复 | Active / Current |
