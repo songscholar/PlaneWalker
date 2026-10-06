@@ -130,7 +130,7 @@ func _run() -> void:
 		"active card keeps its gameplay role visible"
 	)
 	_suite.assert_true(
-		_card_label(active_button, "MetaLabel").text.contains(tr("rare").to_upper()),
+		_card_label(active_button, "MetaLabel").text.contains(tr("RARITY_RARE")),
 		"active card keeps its rarity visible"
 	)
 	_suite.assert_true(
@@ -206,6 +206,28 @@ func _run() -> void:
 	)
 	_suite.assert_true(description_label.get_line_count() > 1, "long risk description wraps onto multiple lines")
 	_suite.assert_true(panel.panel_root.size.y <= 328.0, "wrapped cards remain inside the 16-pixel vertical safe area")
+	var locale_offer := active_offer.duplicate(true)
+	locale_offer.offer_id = "locale-active-offer"
+	_suite.assert_true(panel.render(locale_offer).ok, "locale replacement acceptance opens a fresh authentic active offer")
+	TranslationServer.set_locale("en")
+	await _frames(2)
+	var retained_button: Button = _buttons(panel)[0]
+	_suite.assert_equal(_card_label(retained_button, "NameLabel").text, tr("PARADOX_BEACON_NAME"), "open choice refreshes its name when locale changes")
+	retained_button.pressed.emit()
+	await _frames(1)
+	var before_locale_confirm := _intents.size()
+	TranslationServer.set_locale("zh_CN")
+	await _frames(2)
+	_suite.assert_true(panel.replacement_panel.visible, "locale refresh retains pending active-item replacement")
+	_suite.assert_equal(panel.replacement_confirm_button.text, tr("PARADOX_BEACON_NAME"), "locale refresh updates replacement confirmation")
+	_suite.assert_equal(get_viewport().gui_get_focus_owner(), panel.replacement_cancel_button, "locale refresh preserves confirmation focus")
+	_suite.assert_equal(_buttons(panel)[0], retained_button, "locale refresh retains button identity and scroll position")
+	panel.replacement_confirm_button.pressed.emit()
+	TranslationServer.set_locale("en")
+	await _frames(2)
+	retained_button.pressed.emit()
+	_suite.assert_equal(_intents.size(), before_locale_confirm + 1, "locale refresh cannot reset the one-shot submission guard")
+	_suite.assert_true(_buttons(panel).all(func(button: Button) -> bool: return button.disabled), "locale refresh retains all submitted disabled choices")
 
 	panel.close_panel()
 	_suite.assert_true(not panel.visible, "close hides choice panel")
@@ -221,7 +243,7 @@ func _buttons(panel: Node) -> Array[Node]:
 
 
 func _card_label(button: Button, label_name: String) -> Label:
-	return button.get_node("CardContent/%s" % label_name) as Label
+	return button.find_child(label_name, true, false) as Label
 
 
 func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> void:

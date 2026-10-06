@@ -1265,6 +1265,7 @@ func _pause_run() -> void:
 	if not paused.ok:
 		return
 	get_tree().paused = true
+	pause_menu.configure_build_inspection(runtime_host.content_registry(), runtime_host.current_run_view_state())
 	pause_menu.show_pause()
 
 

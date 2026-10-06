@@ -1,22 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/views/choice_panel_view.gd" id="1_view"]
-
-[sub_resource type="StyleBoxFlat" id="StylePanel"]
-content_margin_left = 16.0
-content_margin_top = 14.0
-content_margin_right = 16.0
-content_margin_bottom = 14.0
-bg_color = Color(0.025, 0.04, 0.06, 0.98)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.18, 0.55, 0.67, 0.95)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
 
 [node name="ChoicePanelV2" type="Control"]
 layout_mode = 3
@@ -40,13 +24,11 @@ theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
-[node name="Center" type="CenterContainer" parent="SafeArea"]
+[node name="Center" type="Control" parent="SafeArea"]
 layout_mode = 2
 
 [node name="PanelRoot" type="PanelContainer" parent="SafeArea/Center"]
-custom_minimum_size = Vector2(608, 300)
-layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
+layout_mode = 0
 
 [node name="Content" type="VBoxContainer" parent="SafeArea/Center/PanelRoot"]
 layout_mode = 2
@@ -55,7 +37,7 @@ theme_override_constants/separation = 8
 [node name="TitleLabel" type="Label" parent="SafeArea/Center/PanelRoot/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 16
 text = "CHOICE_TITLE"
 horizontal_alignment = 1
 
@@ -70,13 +52,12 @@ horizontal_alignment = 1
 [node name="OptionsContainer" type="HBoxContainer" parent="SafeArea/Center/PanelRoot/Content"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 12
+theme_override_constants/separation = 8
 
 [node name="ReplacementPanel" type="PanelContainer" parent="SafeArea/Center/PanelRoot/Content"]
 visible = false
 custom_minimum_size = Vector2(0, 96)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Layout" type="VBoxContainer" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel"]
 layout_mode = 2
@@ -96,13 +77,14 @@ theme_override_constants/separation = 12
 alignment = 1
 
 [node name="CancelButton" type="Button" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions"]
-custom_minimum_size = Vector2(180, 36)
+custom_minimum_size = Vector2(96, 28)
 layout_mode = 2
 focus_mode = 2
 text = "UI_BACK"
 
 [node name="ConfirmButton" type="Button" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions"]
-custom_minimum_size = Vector2(260, 36)
+custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 2
 text = "CONFIRM"

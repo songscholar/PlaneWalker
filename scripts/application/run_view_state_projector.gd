@@ -14,6 +14,7 @@ const RoomInteractionViewScript := preload("res://scripts/ui/contracts/room_inte
 const FloorTransitionViewScript := preload("res://scripts/ui/contracts/floor_transition_view_state.gd")
 const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 const DungeonEventRuntimeScript := preload("res://scripts/events/dungeon_event_runtime.gd")
+const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 
 var _last_run_id: String = ""
 var _view_revision: int = -1
@@ -271,13 +272,14 @@ func project(
 		)
 	var room_index := int(authoritative.get("current_room", 0))
 	var room_total := int(authoritative.get("room_total", 0))
-	if room_index <= 0 or room_total <= 0 or room_index > room_total:
+	var entry := _verified_dungeon_entry(authoritative, room_definition)
+	if room_index < 0 or (room_index == 0 and not entry) or room_total <= 0 or room_index > room_total:
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT",
 			maxi(0, _view_revision),
 			{"field": "authoritative.current_room"}
 		)
-	var room_type := str(room_definition.get("type", ""))
+	var room_type := "entry" if entry else str(room_definition.get("type", ""))
 	if room_type.is_empty():
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT",
@@ -336,7 +338,7 @@ func project(
 			"index": room_index,
 			"total": room_total,
 			"type": room_type,
-			"title_key": _dungeon_room_key(room_type) if str(room_definition.get("runtime_mode", "")) == "launch" else "ROOM_M1_%02d" % room_index,
+			"title_key": _dungeon_room_key(room_type) if entry or str(room_definition.get("runtime_mode", "")) == "launch" else "ROOM_M1_%02d" % room_index,
 		},
 		"player": player_view,
 		"weapon_state": (weapon_projection["weapon_state"] as Dictionary).duplicate(true),
@@ -376,6 +378,36 @@ func project(
 		_view_revision,
 		{"view_state": _latest_view_state}
 	)
+
+
+func _verified_dungeon_entry(authoritative: Dictionary, room_definition: Dictionary) -> bool:
+	if not room_definition.is_empty() or authoritative.get("current_room") != 0 or int(authoritative.get("phase", -1)) != RunPhaseScript.Value.ROOM_ACTIVE:
+		return false
+	var config: Variant = authoritative.get("config")
+	var raw_plan: Variant = authoritative.get("floor_plan")
+	if not config is Dictionary or config.get("milestone") not in ["LAUNCH", "EXPANSION"] or not raw_plan is Dictionary:
+		return false
+	var plan := raw_plan as Dictionary
+	if not DungeonViewRulesScript.exact(plan, FloorPlanScript.ROOT_FIELDS) or plan.schema_version != FloorPlanScript.SCHEMA_VERSION or plan.generator_version != FloorPlanScript.GENERATOR_VERSION or plan.entry_node_id != "entry" or plan.current_node_id != plan.entry_node_id:
+		return false
+	if not plan.selected_edge_ids is Array or not plan.selected_edge_ids.is_empty() or not plan.nodes is Array or not plan.visited_node_ids is Array or plan.visited_node_ids != ["entry"]:
+		return false
+	if not authoritative.get("current_floor") is int or not plan.floor_index is int or plan.run_seed != authoritative.get("run_seed") or plan.floor_index + 1 != authoritative.current_floor or str(plan.generation_digest).is_empty() or FloorPlanScript.compute_generation_digest(plan) != plan.generation_digest:
+		return false
+	var entry_count := 0
+	for value: Variant in plan.nodes:
+		if not value is Dictionary:
+			return false
+		var node := value as Dictionary
+		if node.get("id") != "entry":
+			continue
+		if not DungeonViewRulesScript.exact(node, FloorPlanScript.NODE_FIELDS) or node.layer != 0 or node.room_type != "entry" or node.seed_channel_suffix != "entry" or node.revealed != true or node.visited != true or node.cleared != true:
+			return false
+		for field: String in ["template_id", "encounter_id", "event_id", "merchant_id", "reward_policy_id"]:
+			if node[field] != "":
+				return false
+		entry_count += 1
+	return entry_count == 1
 
 
 func latest_view_state() -> Dictionary:

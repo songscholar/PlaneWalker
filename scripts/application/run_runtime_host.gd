@@ -653,6 +653,11 @@ func runtime_snapshot() -> Dictionary:
 	return _facade.call("snapshot") as Dictionary
 
 
+func current_run_view_state() -> Dictionary:
+	_render_live_hud()
+	return _hud_layer.call("latest_state") if _hud_layer != null else {}
+
+
 func dungeon_ui_context() -> Dictionary:
 	var state := runtime_snapshot()
 	if _facade == null or not _is_floor_plan_snapshot(state):

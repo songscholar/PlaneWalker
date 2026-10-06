@@ -5,8 +5,9 @@ signal option_chosen(offer_id: String, option_id: String, revision: int)
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 
-const CARD_MINIMUM_SIZE := Vector2(184.0, 200.0)
+const CARD_MINIMUM_SIZE := Vector2.ZERO
 
 @onready var panel_root: PanelContainer = $SafeArea/Center/PanelRoot
 @onready var title_label: Label = $SafeArea/Center/PanelRoot/Content/TitleLabel
@@ -23,14 +24,23 @@ var _current_revision: int = -1
 var _submitted: bool = false
 var _pending_replacement_option_id: String = ""
 var _pending_replacement_button: Button
+var _error_key := ""
 
 
 func _ready() -> void:
+	theme = load("res://assets/production/ui/plane_walker_theme.tres") as Theme
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var frame := get_theme_stylebox("panel", "PanelContainer").duplicate() as StyleBox
+	frame.content_margin_left = 16
+	frame.content_margin_right = 16
+	panel_root.add_theme_stylebox_override("panel", frame)
 	visible = false
 	error_label.visible = false
 	replacement_panel.visible = false
 	replacement_cancel_button.pressed.connect(_on_replacement_cancelled)
 	replacement_confirm_button.pressed.connect(_on_replacement_confirmed)
+	resized.connect(_fit_panel)
+	_fit_panel()
 
 
 func render(offer: Dictionary):
@@ -60,8 +70,12 @@ func render(offer: Dictionary):
 	title_label.text = tr(str(_current_offer["title_key"]))
 	error_label.text = ""
 	error_label.visible = false
+	_error_key = ""
 	for option_value: Variant in _current_offer["options"]:
 		_add_option_button(option_value as Dictionary, str(_current_offer["category"]))
+	var accessibility_nodes := get_tree().get_nodes_in_group("accessibility_runtime")
+	if not accessibility_nodes.is_empty():
+		(accessibility_nodes[0] as Node).call("apply_to_tree", self)
 	visible = true
 	var buttons := _option_buttons()
 	FocusCoordinator.link_ring(buttons, true)
@@ -70,11 +84,22 @@ func render(offer: Dictionary):
 	return CommandResultScript.success(revision)
 
 
+func _fit_panel() -> void:
+	if not is_instance_valid(panel_root):
+		return
+	var available := Vector2(maxf(0, size.x - 32), maxf(0, size.y - 32))
+	var extent := Vector2(minf(616, available.x), minf(440, available.y))
+	panel_root.custom_minimum_size = extent
+	panel_root.size = extent
+	panel_root.position = (available - extent) / 2
+
+
 func show_rejection(message_key: String) -> void:
 	if _current_offer.is_empty():
 		return
 	_submitted = false
 	_reset_replacement_confirmation()
+	_error_key = message_key
 	error_label.text = tr(message_key)
 	error_label.visible = true
 	visible = true
@@ -92,6 +117,7 @@ func close_panel() -> void:
 	_reset_replacement_confirmation()
 	error_label.text = ""
 	error_label.visible = false
+	_error_key = ""
 	_clear_options()
 
 
@@ -115,7 +141,7 @@ func _add_option_button(option: Dictionary, category: String) -> void:
 	_apply_card_style(button, tone)
 	button.pressed.connect(_on_option_pressed.bind(_current_offer_id, option_id, _current_revision))
 	options_container.add_child(button)
-	_add_card_content(button, option, tone)
+	_add_card_content(button, option, tone, category)
 	var accessibility_nodes := get_tree().get_nodes_in_group("accessibility_runtime")
 	if not accessibility_nodes.is_empty():
 		(accessibility_nodes[0] as Node).call("apply_to_tree", button)
@@ -147,7 +173,6 @@ func _show_replacement_confirmation(option_id: String) -> void:
 	var active_value: Variant = option.get("active_item", {})
 	if not active_value is Dictionary:
 		return
-	var active := active_value as Dictionary
 	_pending_replacement_option_id = option_id
 	_pending_replacement_button = _button_for_option(option_id)
 	_set_buttons_disabled(true)
@@ -155,18 +180,23 @@ func _show_replacement_confirmation(option_id: String) -> void:
 	replacement_panel.visible = true
 	replacement_cancel_button.disabled = false
 	replacement_confirm_button.disabled = false
-	replacement_cancel_button.text = tr("UI_BACK")
-	replacement_confirm_button.text = tr(str(option.get("name_key", "")))
-	replacement_label.text = "%s  →  %s" % [
-		tr(str(active.get("equipped_name_key", active.get("equipped_content_id", "")))),
-		tr(str(option.get("name_key", option_id))),
-	]
+	_refresh_replacement_text(option)
 	var controls: Array[Control] = [
 		replacement_cancel_button,
 		replacement_confirm_button,
 	]
 	FocusCoordinator.link_ring(controls, true)
 	FocusCoordinator.recover(self, replacement_cancel_button)
+
+
+func _refresh_replacement_text(option: Dictionary) -> void:
+	var active := option.get("active_item", {}) as Dictionary
+	replacement_cancel_button.text = tr("UI_BACK")
+	replacement_confirm_button.text = tr(str(option.get("name_key", "")))
+	replacement_label.text = "%s  →  %s" % [
+		tr(str(active.get("equipped_name_key", active.get("equipped_content_id", "")))),
+		tr(str(option.get("name_key", option.get("option_id", "")))),
+	]
 
 
 func _on_replacement_cancelled() -> void:
@@ -226,7 +256,7 @@ func _clear_options() -> void:
 		child.queue_free()
 
 
-func _add_card_content(button: Button, option: Dictionary, tone: String) -> void:
+func _add_card_content(button: Button, option: Dictionary, tone: String, category: String) -> void:
 	var colors := _tone_colors(tone)
 	var content := VBoxContainer.new()
 	content.name = "CardContent"
@@ -238,19 +268,33 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 	content.offset_top = 9.0
 	content.offset_right = -10.0
 	content.offset_bottom = -9.0
+	var texture := Art.icon(&"controls", &"decline_contract") if str(option.option_id) == "decline_contract" else Art.content(str(option.content_id), category)
+	content.add_child(Art.image(texture, 48, "ChoiceArtwork"))
+	var scroll := ScrollContainer.new()
+	scroll.name = "DetailsScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.get_v_scroll_bar().focus_mode = Control.FOCUS_NONE
+	content.add_child(scroll)
+	var details := VBoxContainer.new()
+	details.name = "Details"
+	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details.add_theme_constant_override("separation", 5)
+	scroll.add_child(details)
+	button.gui_input.connect(_scroll_details.bind(button, scroll, _current_offer_id, _current_revision))
 
 	var name_label := _card_label("NameLabel", tr(str(option["name_key"])), 15, colors["font"])
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(name_label)
+	details.add_child(name_label)
 
 	var meta_label := _card_label(
 		"MetaLabel",
-		"%s  •  %s" % [tr(str(option["rarity"])).to_upper(), tr(str(option["role_key"]))],
+		"%s / %s" % [tr("RARITY_" + str(option["rarity"]).to_upper()), tr(str(option["role_key"]))],
 		11,
 		colors["border"]
 	)
 	meta_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(meta_label)
+	details.add_child(meta_label)
 
 	var archetype_label := _card_label(
 		"ArchetypeLabel",
@@ -259,7 +303,7 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 		Color(0.62, 0.7, 0.78, 1.0)
 	)
 	archetype_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(archetype_label)
+	details.add_child(archetype_label)
 
 	var active_value: Variant = option.get("active_item", {})
 	var active := active_value as Dictionary if active_value is Dictionary else {}
@@ -271,7 +315,7 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 	)
 	mode_label.visible = not active.is_empty()
 	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(mode_label)
+	details.add_child(mode_label)
 
 	var cooldown_frames := int(active.get("cooldown_frames", 0))
 	var cooldown_label := _card_label(
@@ -284,7 +328,7 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 	)
 	cooldown_label.visible = cooldown_frames > 0
 	cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(cooldown_label)
+	details.add_child(cooldown_label)
 
 	var description_label := _card_label(
 		"DescriptionLabel",
@@ -292,16 +336,25 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 		12,
 		Color(0.9, 0.93, 0.96, 1.0)
 	)
-	description_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	description_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	content.add_child(description_label)
+	details.add_child(description_label)
 
 	var effect_lines: Array[String] = []
 	for effect_key: Variant in option["effect_summary_keys"]:
 		effect_lines.append(tr(str(effect_key)))
 	var effect_label := _card_label("EffectLabel", "\n".join(effect_lines), 11, colors["font"])
 	effect_label.visible = not effect_lines.is_empty()
-	content.add_child(effect_label)
+	details.add_child(effect_label)
+
+
+func _scroll_details(event: InputEvent, button: Button, scroll: ScrollContainer, offer_id: String, revision: int) -> void:
+	if _submitted or offer_id != _current_offer_id or revision != _current_revision:
+		return
+	if event.is_action_pressed("ui_up"):
+		scroll.scroll_vertical = maxi(0, scroll.scroll_vertical - 48)
+		button.accept_event()
+	elif event.is_action_pressed("ui_down"):
+		scroll.scroll_vertical += 48
+		button.accept_event()
 
 
 func _card_label(label_name: String, value: String, font_size: int, color: Color) -> Label:
@@ -355,39 +408,18 @@ func _choice_tone(option: Dictionary, category: String) -> String:
 
 func _apply_card_style(button: Button, tone: String) -> void:
 	var colors := _tone_colors(tone)
-	var normal := _card_style(colors["background"], colors["border"])
-	var hover := _card_style(colors["hover"], colors["border"])
-	var pressed := _card_style(colors["pressed"], colors["border"])
-	var disabled := _card_style(colors["disabled"], colors["disabled_border"])
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", hover.duplicate(true))
-	button.add_theme_stylebox_override("disabled", disabled)
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var frame := get_theme_stylebox(state, "Button").duplicate() as StyleBox
+		frame.content_margin_left = 0
+		frame.content_margin_right = 0
+		frame.content_margin_top = 0
+		frame.content_margin_bottom = 0
+		button.add_theme_stylebox_override(state, frame)
 	button.add_theme_color_override("font_color", colors["font"])
 	button.add_theme_color_override("font_hover_color", Color.WHITE)
 	button.add_theme_color_override("font_pressed_color", Color.WHITE)
 	button.add_theme_color_override("font_disabled_color", Color(0.48, 0.5, 0.54, 1.0))
 	button.add_theme_font_size_override("font_size", 13)
-
-
-func _card_style(background: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	style.content_margin_left = 8.0
-	style.content_margin_top = 8.0
-	style.content_margin_right = 8.0
-	style.content_margin_bottom = 8.0
-	return style
 
 
 func _tone_colors(tone: String) -> Dictionary:
@@ -427,3 +459,31 @@ func _tone_colors(tone: String) -> Dictionary:
 func _button_node_name(option_id: String) -> String:
 	var sanitized := option_id.replace("-", "_").replace(" ", "_")
 	return "Option_%s" % sanitized
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_TRANSLATION_CHANGED or not is_node_ready() or _current_offer.is_empty():
+		return
+	title_label.text = tr(str(_current_offer.title_key))
+	error_label.text = tr(_error_key) if not _error_key.is_empty() else ""
+	for button: Button in options_container.get_children():
+		var option := _current_offer_option(str(button.get_meta("option_id")))
+		var active := option.get("active_item", {}) as Dictionary
+		var effects: PackedStringArray = []
+		for key: String in option.effect_summary_keys:
+			effects.append(tr(key))
+		var values := {
+			"NameLabel": tr(str(option.name_key)),
+			"MetaLabel": "%s / %s" % [tr("RARITY_" + str(option.rarity).to_upper()), tr(str(option.role_key))],
+			"ArchetypeLabel": tr(str(option.archetype_key)),
+			"DescriptionLabel": tr(str(option.description_key)),
+			"ModeLabel": tr("INPUT_ACTION_ACTIVE_ITEM") if not active.is_empty() else "",
+			"CooldownLabel": tr("HUD_WEAPON_COOLDOWN_FMT") % (float(active.get("cooldown_frames", 0)) / 60.0) if int(active.get("cooldown_frames", 0)) > 0 else "",
+			"EffectLabel": "\n".join(effects),
+		}
+		for label_name: String in values:
+			var label := button.find_child(label_name, true, false) as Label
+			if label != null:
+				label.text = values[label_name]
+	if not _pending_replacement_option_id.is_empty():
+		_refresh_replacement_text(_current_offer_option(_pending_replacement_option_id))

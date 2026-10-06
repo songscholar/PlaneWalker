@@ -6,6 +6,9 @@ signal intent_emitted(intent: Dictionary)
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
+const ResourceSlot := preload("res://scripts/ui/components/ui_resource_slot.gd")
+const Facts := preload("res://scripts/ui/style/combat_hud_facts.gd")
 const PRESENTATION_THEME_PATH := "res://assets/production/ui/plane_walker_theme.tres"
 
 @onready var hud_root: Control = $HudRoot
@@ -44,6 +47,20 @@ const PRESENTATION_THEME_PATH := "res://assets/production/ui/plane_walker_theme.
 var _last_revision: int = -1
 var _last_run_id: String = ""
 var _last_state: Dictionary = {}
+var _actor_art: TextureRect
+var _hp_counter: Label
+var _energy_counter: Label
+var _hp_gauge: ProgressBar
+var _energy_gauge: ProgressBar
+var _danger_marker: Label
+var _weapon_slot: Control
+var _character_slot: Control
+var _active_slot: Control
+var _time_slots: Array[Control] = []
+var _boss_title: Label
+var _boss_art: TextureRect
+var _boss_gauge: ProgressBar
+var _phase_pips: HBoxContainer
 
 
 func _ready() -> void:
@@ -61,6 +78,119 @@ func _ready() -> void:
 	pause_indicator.visible = false
 	character_panel.visible = false
 	active_item_panel.visible = false
+	_build_graphical_layout()
+
+
+func _build_graphical_layout() -> void:
+	var layout: Control = hud_root.get_node("SafeArea/HudLayout")
+	for panel_name: String in ["PlayerPanel", "WeaponPanel", "CharacterPanel", "ActiveItemPanel", "SkillPanel", "BossPanel"]:
+		var panel: PanelContainer = layout.get_node(panel_name)
+		panel.get_child(0).hide()
+	_place(layout.get_node("PlayerPanel"), Vector2(0, 1), Rect2(0, -46, 220, 46))
+	_place(weapon_panel, Vector2.ONE, Rect2(-248, -44, 56, 44))
+	_place(layout.get_node("SkillPanel"), Vector2.ONE, Rect2(-186, -44, 118, 44))
+	_place(active_item_panel, Vector2.ONE, Rect2(-62, -44, 56, 44))
+	_place(character_panel, Vector2(0, 1), Rect2(0, -96, 56, 44))
+	_place(boss_panel, Vector2(0.5, 0), Rect2(-172, 0, 344, 34))
+	var boss_frame := hud_root.get_theme_stylebox("panel", "PanelContainer").duplicate() as StyleBox
+	boss_frame.content_margin_left = 6
+	boss_frame.content_margin_right = 6
+	boss_frame.content_margin_top = 2
+	boss_frame.content_margin_bottom = 2
+	boss_panel.add_theme_stylebox_override("panel", boss_frame)
+	for panel: PanelContainer in [weapon_panel, character_panel, active_item_panel, layout.get_node("SkillPanel")]:
+		panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	_weapon_slot = _slot(weapon_panel, "WeaponSlot")
+	_character_slot = _slot(character_panel, "CharacterSlot")
+	_active_slot = _slot(active_item_panel, "ActiveItemSlot")
+	var pair := HBoxContainer.new()
+	pair.name = "TimeSlots"
+	pair.add_theme_constant_override("separation", 6)
+	layout.get_node("SkillPanel").add_child(pair)
+	for index: int in range(2):
+		_time_slots.append(_slot(pair, "TimeSlot%d" % (index + 1)))
+	var vitals := Control.new()
+	vitals.name = "GraphicalVitals"
+	layout.get_node("PlayerPanel").add_child(vitals)
+	_actor_art = Art.image(null, 32, "ActorPortrait")
+	vitals.add_child(_actor_art)
+	_actor_art.position = Vector2(0, 2)
+	_actor_art.size = Vector2(32, 32)
+	_hp_counter = _counter(vitals, "HpCounter", Rect2(38, -2, 166, 20), Color("edf0dc"))
+	_energy_counter = _counter(vitals, "EnergyCounter", Rect2(54, 16, 150, 20), Color("61d5e7"))
+	var energy_art := Art.image(Art.icon(&"items", &"chronal_battery"), 12, "EnergyGlyph")
+	vitals.add_child(energy_art)
+	energy_art.position = Vector2(38, 20)
+	energy_art.size = Vector2(12, 12)
+	_hp_gauge = _gauge(vitals, Rect2(38, 16, 166, 2), Color("f07065"))
+	_energy_gauge = _gauge(vitals, Rect2(38, 34, 166, 2), Color("61d5e7"))
+	_danger_marker = _counter(vitals, "DangerMarker", Rect2(0, -3, 24, 24), Color("f07065"))
+	_danger_marker.text = "!"
+	_danger_marker.visible = false
+	var boss := Control.new()
+	boss.name = "GraphicalBossStrip"
+	boss_panel.add_child(boss)
+	_boss_art = Art.image(null, 20, "BossPortrait")
+	boss.add_child(_boss_art)
+	_boss_art.position = Vector2(0, 0)
+	_boss_art.size = Vector2(20, 20)
+	_boss_title = _counter(boss, "BossTitle", Rect2(26, -3, 248, 25), Color("edf0dc"))
+	_boss_title.theme_type_variation = &"DisplayLabel"
+	_boss_gauge = _gauge(boss, Rect2(0, 25, 332, 3), Color("f07065"))
+	_phase_pips = HBoxContainer.new()
+	_phase_pips.name = "BossPhasePips"
+	_phase_pips.position = Vector2(278, 4)
+	_phase_pips.add_theme_constant_override("separation", 3)
+	boss.add_child(_phase_pips)
+	for control: Control in hud_root.find_children("*", "Control", true, false):
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _place(control: Control, anchor: Vector2, bounds: Rect2) -> void:
+	control.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	control.anchor_left = anchor.x
+	control.anchor_right = anchor.x
+	control.anchor_top = anchor.y
+	control.anchor_bottom = anchor.y
+	control.offset_left = bounds.position.x
+	control.offset_top = bounds.position.y
+	control.offset_right = bounds.end.x
+	control.offset_bottom = bounds.end.y
+
+
+func _slot(parent: Control, slot_name: String) -> Control:
+	var slot := ResourceSlot.new()
+	slot.name = slot_name
+	parent.add_child(slot)
+	return slot
+
+
+func _counter(parent: Control, label_name: String, bounds: Rect2, color: Color) -> Label:
+	var label := Label.new()
+	label.name = label_name
+	label.theme_type_variation = &"CounterLabel"
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", color)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(label)
+	label.position = bounds.position
+	label.size = bounds.size
+	return label
+
+
+func _gauge(parent: Control, bounds: Rect2, color: Color) -> ProgressBar:
+	var gauge := ProgressBar.new()
+	gauge.show_percentage = false
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
+	gauge.add_theme_stylebox_override("fill", fill)
+	var empty := StyleBoxFlat.new()
+	empty.bg_color = Color("242d2d")
+	gauge.add_theme_stylebox_override("background", empty)
+	parent.add_child(gauge)
+	gauge.position = bounds.position
+	gauge.size = bounds.size
+	return gauge
 
 
 func _notification(what: int) -> void:
@@ -119,6 +249,13 @@ func _render_state(state: Dictionary) -> void:
 	energy_label.text = "%s  %d / %d" % [tr("UI_TIME"), roundi(energy), roundi(max_energy)]
 	low_hp_indicator.visible = hp / max_hp <= 0.3
 	low_hp_indicator.text = "!  HP < 30%  !"
+	_hp_counter.text = "HP  %d / %d" % [roundi(hp), roundi(max_hp)]
+	_energy_counter.text = "%d / %d" % [roundi(energy), roundi(max_energy)]
+	_hp_gauge.max_value = max_hp
+	_hp_gauge.value = hp
+	_energy_gauge.max_value = max_energy
+	_energy_gauge.value = energy
+	_danger_marker.visible = low_hp_indicator.visible
 
 	var time_slots := player["time_slots"] as Array
 	for index: int in range(skill_slot_labels.size()):
@@ -127,6 +264,8 @@ func _render_state(state: Dictionary) -> void:
 			str(slot["ability_id"]),
 			float(slot["cooldown"])
 		)
+		_time_slots[index].call("render_slot", StringName(slot.ability_id), 0, 0, float(slot.cooldown) <= 0, tr("HUD_WEAPON_READY") if float(slot.cooldown) <= 0 else "%.1f" % float(slot.cooldown))
+		_time_slots[index].tooltip_text = skill_slot_labels[index].text
 
 	_render_weapon(state["weapon_state"] as Dictionary)
 	_render_character(state["character_state"])
@@ -145,6 +284,22 @@ func _render_state(state: Dictionary) -> void:
 	boss_hp_bar.max_value = float(boss_state["max_hp"])
 	boss_hp_bar.value = float(boss_state["hp"])
 	boss_phase_label.text = tr("UI_STATUS_PHASE_FMT") % ("%d / %d" % [int(boss_state["phase_index"]), int(boss_state["phase_total"])])
+	_boss_title.text = boss_name_label.text
+	_boss_art.texture = Art.actor(str(boss_state.boss_id))
+	_boss_gauge.max_value = boss_hp_bar.max_value
+	_boss_gauge.value = boss_hp_bar.value
+	if _phase_pips.get_child_count() != int(boss_state.phase_total):
+		for pip: Node in _phase_pips.get_children():
+			_phase_pips.remove_child(pip)
+			pip.queue_free()
+		for index: int in range(int(boss_state.phase_total)):
+			var pip := ColorRect.new()
+			pip.custom_minimum_size = Vector2(8, 6)
+			pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_phase_pips.add_child(pip)
+	for index: int in range(_phase_pips.get_child_count()):
+		(_phase_pips.get_child(index) as ColorRect).color = Color("f07065") if index < int(boss_state.phase_index) else Color("697771")
+	boss_panel.tooltip_text = boss_name_label.text + " / " + boss_phase_label.text
 
 
 func _format_skill(ability_id: String, cooldown: float) -> String:
@@ -166,112 +321,45 @@ func _render_active_item(value: Variant) -> void:
 		if bool(active["ready"])
 		else tr("HUD_WEAPON_COOLDOWN_FMT") % (float(cooldown_frames) / 60.0)
 	)
+	_active_slot.call("render_slot", StringName(active.content_id), int(active.cooldown_max) - cooldown_frames, int(active.cooldown_max), bool(active.ready), tr("HUD_WEAPON_READY") if bool(active.ready) else "%.1f" % (float(cooldown_frames) / 60.0))
+	_active_slot.tooltip_text = active_item_name_label.text + " / " + active_item_status_label.text
 
 
 func _render_character(value: Variant) -> void:
 	character_panel.visible = value is Dictionary
+	_actor_art.visible = value is Dictionary
 	if not value is Dictionary:
 		return
 	var character := value as Dictionary
 	var character_id := str(character["character_id"])
-	var meter_kind := str(character["meter_kind"])
 	var meter_current := float(character["meter_current"])
 	var meter_max := float(character["meter_max"])
 	var cooldown_current := float(character["cooldown_current"])
-	character_name_label.text = tr("CHARACTER_%s_NAME" % character_id.to_upper())
+	var facts := Facts.character(character)
+	character_name_label.text = facts.name
 	character_meter_bar.max_value = meter_max
 	character_meter_bar.value = meter_current
-	character_meter_label.text = tr("HUD_CHARACTER_METER_%s_FMT" % meter_kind.to_upper()) % [
-		roundi(meter_current),
-		roundi(meter_max),
-	]
-	character_status_label.text = _format_character_status(character)
-	character_cooldown_label.text = (
-		tr("HUD_CHARACTER_COOLDOWN_READY")
-		if cooldown_current <= 0.0
-		else tr("HUD_CHARACTER_COOLDOWN_FMT") % (cooldown_current / 60.0)
-	)
-
-
-func _format_character_status(character: Dictionary) -> String:
-	var status_id := str(character["status_id"])
-	var status_remaining := float(character["status_remaining"])
-	var status_stacks := int(character["status_stacks"])
-	if status_id == "primer":
-		return tr("HUD_CHARACTER_STATUS_PRIMER_FMT") % [
-			tr(TimeAbilityIdsScript.localization_key(str(character["secondary_value"]))),
-			status_remaining / 60.0,
-		]
-	if status_id == "echo_pending":
-		return tr("HUD_CHARACTER_STATUS_ECHO_PENDING_FMT") % status_stacks
-	if status_id in ["guarding", "devouring", "armored", "ready"]:
-		return tr("HUD_CHARACTER_STATUS_%s" % status_id.to_upper())
-	return tr("HUD_CHARACTER_STATUS_%s_FMT" % status_id.to_upper()) % (status_remaining / 60.0)
+	character_meter_label.text = facts.meter
+	character_status_label.text = facts.status
+	character_cooldown_label.text = facts.cooldown
+	_actor_art.texture = Art.actor(character_id)
+	_character_slot.call("set_artwork", Art.actor(character_id))
+	_character_slot.call("render_slot", &"", meter_current, meter_max, cooldown_current <= 0, "%.1f" % (cooldown_current / 60.0) if cooldown_current > 0 else "%d/%d" % [roundi(meter_current), roundi(meter_max)])
+	_character_slot.tooltip_text = " / ".join([character_name_label.text, character_meter_label.text, character_status_label.text, character_cooldown_label.text])
 
 
 func _render_weapon(weapon: Dictionary) -> void:
 	var weapon_id := str(weapon["weapon_id"])
-	var meter_kind := str(weapon["meter_kind"])
 	var meter_current := float(weapon["meter_current"])
 	var meter_max := float(weapon["meter_max"])
-	weapon_name_label.text = tr("WEAPON_%s_NAME" % weapon_id.to_upper())
+	var facts := Facts.weapon(weapon)
+	weapon_name_label.text = facts.name
 	weapon_meter_bar.max_value = meter_max
 	weapon_meter_bar.value = meter_current
-	weapon_meter_label.text = _format_weapon_meter(meter_kind, meter_current, meter_max)
-	weapon_status_label.text = _format_weapon_status(weapon)
-
-
-func _format_weapon_meter(meter_kind: String, current: float, maximum: float) -> String:
-	var key := "HUD_WEAPON_METER_%s_FMT" % meter_kind.to_upper()
-	return tr(key) % [roundi(current), roundi(maximum)]
-
-
-func _format_weapon_status(weapon: Dictionary) -> String:
-	if str(weapon["weapon_id"]) == "staff":
-		return _format_staff_status(weapon)
-	var status_id := str(weapon["status_id"])
-	var status_remaining := float(weapon["status_remaining"])
-	var secondary_id := str(weapon["secondary_id"])
-	var secondary_value := float(weapon["secondary_value"])
-	if status_id == "time_load":
-		return tr("HUD_WEAPON_STATUS_TIME_LOAD_FMT") % (status_remaining / 60.0)
-	if status_id == "perfect_reload":
-		return tr("HUD_WEAPON_STATUS_PERFECT_RELOAD")
-	if secondary_id == "time_load" and secondary_value > 0.0:
-		return tr("HUD_WEAPON_STATUS_TIME_LOAD_FMT") % (secondary_value / 60.0)
-	if status_id == "ready":
-		return tr("HUD_WEAPON_READY")
-	return tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper())
-
-
-func _format_staff_status(weapon: Dictionary) -> String:
-	var status_id := str(weapon["status_id"])
-	var element_key := _staff_element_translation_key(int(weapon["secondary_value"]))
-	var element_label := tr(element_key)
-	if status_id == "sequence_ready":
-		return "%s · %s · %.1fs" % [
-			tr("HUD_WEAPON_STATUS_SEQUENCE_READY"),
-			element_label,
-			float(weapon["status_remaining"]) / 60.0,
-		]
-	if status_id in ["channeling", "acting"]:
-		return "%s · %s" % [
-			tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper()),
-			element_label,
-		]
-	return tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper())
-
-
-func _staff_element_translation_key(element_code: int) -> String:
-	match element_code:
-		1:
-			return "HUD_WEAPON_STATUS_ELEMENT_FIRE"
-		2:
-			return "HUD_WEAPON_STATUS_ELEMENT_ICE"
-		3:
-			return "HUD_WEAPON_STATUS_ELEMENT_LIGHTNING"
-		_:
-			return "HUD_WEAPON_STATUS_ELEMENT_FIRE"
+	weapon_meter_label.text = facts.meter
+	weapon_status_label.text = facts.status
+	_weapon_slot.call("render_slot", StringName(weapon_id), meter_current, meter_max, str(weapon.phase) == "READY", "%d/%d" % [roundi(meter_current), roundi(meter_max)])
+	_weapon_slot.tooltip_text = " / ".join([weapon_name_label.text, weapon_meter_label.text, weapon_status_label.text])
 
 
 func _format_time(run_time_ms: int) -> String:

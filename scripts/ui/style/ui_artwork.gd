@@ -3,6 +3,7 @@ extends RefCounted
 
 const Catalog := preload("res://scripts/presentation/ui_art_catalog.gd")
 const ActorAtlas := preload("res://scripts/presentation/actor_atlas_projection.gd")
+const RoomArtwork := preload("res://scripts/dungeon/native_room_artwork.gd")
 static var _textures: Dictionary = {}
 
 
@@ -40,6 +41,37 @@ static func actor(actor_id: String) -> Texture2D:
 	projection.free()
 	_textures[key] = texture
 	return texture
+
+
+static func content(content_id: String, category: String = "") -> Texture2D:
+	var batches := {"item": "items", "blessing": "blessings", "curse": "curses", "contract": "curses", "talent": "talents"}
+	if batches.has(category):
+		var category_texture := icon(StringName(batches[category]), StringName(content_id))
+		if category_texture != null:
+			return category_texture
+	for batch: String in ["items", "blessings", "curses", "talents"]:
+		var texture := icon(StringName(batch), StringName(content_id))
+		if texture != null:
+			return texture
+	return null
+
+
+static func landmark(room_type: String) -> Texture2D:
+	var index := RoomArtwork.LANDMARK_FRAMES.find(room_type)
+	if index < 0:
+		return icon(&"room_types", StringName(room_type))
+	var base := icon(&"rooms", &"landmarks") as AtlasTexture
+	if base == null or base.atlas.get_width() < (index + 1) * 64 or base.atlas.get_height() < 64:
+		return null
+	var texture := AtlasTexture.new()
+	texture.atlas = base.atlas
+	texture.region = Rect2(index * 64, 0, 64, 64)
+	return texture
+
+
+static func floor_tile(floor_id: String) -> Texture2D:
+	var palette := str(RoomArtwork.FLOOR_ART.get(floor_id, ""))
+	return icon(&"rooms", StringName(palette + "_tiles")) if not palette.is_empty() else null
 
 
 static func image(texture: Texture2D, size: int = 32, node_name: String = "Artwork") -> TextureRect:

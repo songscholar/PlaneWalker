@@ -237,6 +237,8 @@ static func validate(value: Variant):
 	var room_result = _validate_room(state.get("room"), revision)
 	if not room_result.ok:
 		return room_result
+	if str(state.room.type) == "entry" and str(state.phase) != "ROOM_ACTIVE":
+		return _failure(revision, "room.type", "entry requires the active dungeon-entry phase")
 	var player_result = _validate_player(state.get("player"), revision)
 	if not player_result.ok:
 		return player_result
@@ -319,7 +321,8 @@ static func _validate_room(value: Variant, revision: int):
 		return _failure(revision, "room", "index and total must be integers")
 	var index := int(room["index"])
 	var total := int(room["total"])
-	if total <= 0 or index <= 0 or index > total:
+	var entry := str(room.get("type", "")) == "entry"
+	if total <= 0 or index < 0 or index > total or (index == 0 and not entry) or (entry and index != 0):
 		return _failure(revision, "room.index", "room index must be within total")
 	if not _is_non_empty_string(room.get("type")):
 		return _failure(revision, "room.type", "expected non-empty string")

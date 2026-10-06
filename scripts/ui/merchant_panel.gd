@@ -5,6 +5,8 @@ signal merchant_action_requested(action_id: StringName, offer_id: StringName, ex
 signal leave_requested(expected_revision: int)
 
 const Contract := preload("res://scripts/ui/contracts/merchant_view_state.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
+const Page := preload("res://scripts/ui/hub_pages/hub_page_layout.gd")
 
 
 func _validate(state: Dictionary):
@@ -16,16 +18,27 @@ func _render_state() -> void:
 	summary_label.text = tr("UI_GOLD_FMT") % int(_state["gold"])
 	_add_text(tr(_state["intro_key"]))
 	_add_text(tr(_state["description_key"]))
+	rows_container.add_child(Art.image(Art.landmark("shop"), 64, "MerchantArtwork"))
+	var shelf := Page.grid("OfferShelf")
+	rows_container.add_child(shelf)
 	for offer: Dictionary in _state["offers"]:
 		var label := "%s  |  %s" % [tr(offer["name_key"]), tr("UI_PRICE_FMT") % int(offer["price"])]
 		var detail := "%s  |  %s" % [tr("RARITY_%s" % str(offer["rarity"]).to_upper()), tr(offer["description_key"])]
 		if offer["sold"]:
 			detail += "  |  %s" % tr("UI_SOLD")
-		_add_action(offer["offer_id"], label, detail, offer["available"], offer["disabled_reason_key"], _request_merchant_action.bind(&"purchase_reward", StringName(offer["offer_id"]), int(_state["revision"])))
+		var item := VBoxContainer.new()
+		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		item.add_theme_constant_override("separation", 4)
+		shelf.add_child(item)
+		var artwork := Art.image(Art.content(str(offer.content_id), str(offer.category)), 32)
+		artwork.modulate = Color(0.35, 0.39, 0.36) if offer.sold else Color.WHITE
+		item.add_child(artwork)
+		Page.relocate_row(_add_action(offer["offer_id"], label, detail, offer["available"], offer["disabled_reason_key"], _request_merchant_action.bind(&"purchase_reward", StringName(offer["offer_id"]), int(_state["revision"]))), item)
+	var services := Page.section(rows_container, tr("UI_FINISH_SERVICES"), Art.icon(&"room_types", &"rest"))
 	for service: Dictionary in _state["services"]:
 		var price_key := "UI_HEALTH_PRICE_FMT" if service["cost_kind"] == "health" else "UI_PRICE_FMT"
 		var label := "%s  |  %s" % [tr(service["label_key"]), tr(price_key) % int(service["price"])]
-		_add_action(service["action_id"], label, "", service["available"], service["disabled_reason_key"], _request_merchant_action.bind(StringName(service["action_id"]), StringName(service["target_id"]), int(_state["revision"])))
+		Page.relocate_row(_add_action(service["action_id"], label, "", service["available"], service["disabled_reason_key"], _request_merchant_action.bind(StringName(service["action_id"]), StringName(service["target_id"]), int(_state["revision"]))), services)
 	_add_action("leave", tr("UI_ROOM_LEAVE"), "", true, "", _request_leave.bind(int(_state["revision"])))
 
 
