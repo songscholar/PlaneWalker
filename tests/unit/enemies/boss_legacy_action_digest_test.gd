@@ -10,10 +10,15 @@ var suite: RefCounted
 
 class CountingBoss extends "res://scripts/enemies/launch/launch_boss_runtime.gd":
 	var fresh_action_calls := 0
+	var validation_context_calls := 0
 
 	func _make_action(phase_index: int, enraged: bool, room_half: bool = true, current_time_responses: bool = true) -> RefCounted:
 		fresh_action_calls += 1
 		return super._make_action(phase_index, enraged, room_half, current_time_responses)
+
+	func _snapshot_validation_context() -> PackedByteArray:
+		validation_context_calls += 1
+		return super._snapshot_validation_context()
 
 
 func _ready() -> void:
@@ -75,10 +80,12 @@ func _test_restore(runtime: RefCounted, definition: Dictionary, identity: Dictio
 	suite.assert_equal(is_historical, historical and saved.action.phase != "IDLE", "historical fixture retains the old regime until authored action retirement")
 	var previous: RefCounted = runtime.get("_action")
 	runtime.fresh_action_calls = 0
+	runtime.validation_context_calls = 0
 	suite.assert_true(runtime.restore_snapshot(saved), "accepted complete Boss restoration retains every original check")
 	var restored: RefCounted = runtime.get("_action")
 	var expected_calls := 2 if is_historical else 1
 	suite.assert_equal(runtime.fresh_action_calls, expected_calls, "warm restore constructs only independent mutable selection: " + definition.id + ":" + str(historical) + ":" + str(frame))
+	suite.assert_equal(runtime.validation_context_calls, 1, "warm restore encodes one live validation context: " + definition.id + ":" + str(historical) + ":" + str(frame))
 	suite.assert_true(not is_same(previous, restored), "actual restoration creates a different mutable Action")
 	suite.assert_equal(var_to_bytes(runtime.snapshot()), var_to_bytes(saved), "complete typed Boss and auxiliary snapshot remains exact")
 	suite.assert_equal(runtime.get("_legacy_void_action"), is_historical and definition.id == "void_throne", "Void current-versus-historical classification is unchanged")
@@ -87,8 +94,10 @@ func _test_restore(runtime: RefCounted, definition: Dictionary, identity: Dictio
 	var repeated: Dictionary = runtime.call("_action_validation_template", 0, false, true, true, context)
 	suite.assert_true(is_same(template, repeated), "legacy classification preserves the bounded private template")
 	runtime.fresh_action_calls = 0
+	runtime.validation_context_calls = 0
 	suite.assert_true(runtime.restore_snapshot(saved), "a second complete restoration remains accepted")
 	suite.assert_equal(runtime.fresh_action_calls, expected_calls, "repeat restore retains only independent mutable selection: " + definition.id + ":" + str(historical) + ":" + str(frame))
+	suite.assert_equal(runtime.validation_context_calls, 1, "repeat restore encodes one live validation context: " + definition.id + ":" + str(historical) + ":" + str(frame))
 	suite.assert_true(not is_same(restored, runtime.get("_action")), "separate restorations cannot share mutable Action state")
 	_test_refusals(runtime, saved)
 	var reference := Boss.new()

@@ -113,12 +113,14 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Boss Parent Restore Evidence](current/2026-10-06-native-boss-parent-restore-evidence.md) | 五个 Boss 的实际恢复、原始字段顺序、独立状态和原生事务一致 | Focused Verified / Integrated performance pending |
 | [Native Legacy Action Digest Plan](current/2026-10-06-native-legacy-action-digest-plan.md) | 当前动作配置摘要复用已校验模板，保留历史动作及独立恢复 | Approved / Current |
 | [Native Legacy Action Digest Evidence](current/2026-10-06-native-legacy-action-digest-evidence.md) | 五个 Boss 的当前和历史动作恢复保持一致，额外配置消除 | Focused Verified / Integrated performance pending |
+| [Native Boss Restore Context Evidence](current/2026-10-06-native-boss-restore-context-evidence.md) | 当前候选摘要复用，恢复上下文编码从两次降到一次，五首领及六项邻域回归通过 | Implemented / Focused verified |
 | [Native Effects Snapshot Copy Plan](current/2026-10-06-native-effects-snapshot-copy-plan.md) | 保留快照字段位置和完整子状态，消除被覆盖分支的重复复制 | Active / Current |
 | [Native Effects Snapshot Copy Evidence](current/2026-10-06-native-effects-snapshot-copy-evidence.md) | 原生事务和历史快照保持逐字节一致，被覆盖子状态复制从 21 次降为 0 次 | Focused Verified / Integrated performance pending |
 | [Native Owned Frame Token Plan](current/2026-10-06-native-owned-frame-token-plan.md) | 原生 Actor 私有候选与精确身份令牌，保留公开票据和原有补偿边界 | Active / Current |
 | [Native Owned Frame Token Evidence](current/2026-10-06-native-owned-frame-token-evidence.md) | 令牌与实际 Main 新局、冷读档接入专项通过；原生路径性能重测待完成 | Focused Verified / Native-enabled performance pending |
 | [Native Production Frame Integration Plan](current/2026-10-06-native-production-frame-integration-plan.md) | 正式 Bridge 精确 Script 接入、实际 Main 新局与冷恢复令牌验收 | Approved / Current |
 | [Native Production Frame Integration Evidence](current/2026-10-06-native-production-frame-integration-evidence.md) | 正式 Main 新局与物理冷读档均采用原生候选，独立 RED/GREEN、十一项邻域及空缓存导入通过 | Implemented / Focused regressions verified |
+| [Native-Enabled Runtime Measurement Evidence](current/2026-10-06-native-enabled-runtime-measurement-evidence.md) | 冻结原生接入源码的 editor/release 600 帧、官方导入导出、物理 typed 端点及 PID/RSS 验证通过，整帧预算仍失败 | Recording And Monitoring Verified / Frame budget failed |
 | [Native Owned Hotpath Diagnostic Plan](current/2026-10-06-native-owned-hotpath-diagnostic-plan.md) | 冻结 Main 热点、真实 native/public 调用数与完整快照编码归因 | Approved / Current |
 | [Native Release Runtime Probe Plan](current/2026-10-06-native-release-probe-plan.md) | 官方发行运行时打包测量、真实内存可用性与执行身份 | Approved / Current |
 | [Native Release Runtime Probe Evidence](current/2026-10-06-native-release-probe-evidence.md) | 公开票据 fallback 基线的 600 帧录制与 PID/RSS 绑定通过；历史失败保留，帧预算未达标 | Recording And Monitoring Verified / Frame budget failed |

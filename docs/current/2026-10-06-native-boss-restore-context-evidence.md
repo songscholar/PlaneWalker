@@ -1,0 +1,87 @@
+# Native Boss Restore Context Evidence
+
+- Status: Implemented / Focused verified
+- Document Role: Current Boss restore classification optimization and diagnostic attribution
+- Authority Level: Below approved full-product completion contract
+- Applies To: Complete Boss restore, current/historical Action classification
+- Owner: Project integration lead
+- Last Verified: 2026-10-06
+- Certification Status: No frame-budget, rendered, saturation, soak, UI or human certification
+
+## Observed Cost And Design
+
+The actual Main diagnostic at frozen native-enabled `f85c84d` accepts all
+120 measured frames and observes 120 native preparations and zero public
+preparations. Its report is retained at
+`build/retained-checkout/native-enabled-hotpaths-f85c84d-20261006/build/floor4-phase2-native-enabled-diagnostic-120/report.json`,
+SHA-256 `3455018600668fdc19bc055db168ec030c07b395b370c58f0d358f6870b5cdc8`.
+Strict runtime logs, runtime source stability, actual PID/RSS binding and
+physical typed recording endpoints pass. The diagnostic has timers and caller
+edges, so its costs attribute work and cannot certify production performance.
+
+Mean measured work is 45.289 ms and mean frame wall time is 53.972 ms;
+work p95 is 62.533 ms and wall p95 is 75.180 ms. Recorder safety traversal
+consumes 3.125 ms per measured frame. Boss configuration-context encoding
+consumes approximately 3.045 ms per frame, Boss snapshot encoding 2.898 ms,
+and Void auxiliary snapshot work 2.225 ms. Inclusive parent/child totals must
+not be added to these exclusive costs.
+
+Boss restore first performs its existing complete `can_restore_snapshot`
+validation, then `_action_for_snapshot` constructs an independent current
+Action and, when required, an independent historical candidate. The previous
+legacy classification separately encoded the complete live configuration to
+read a cached current-regime template digest. That current digest already
+exists in the freshly configured current candidate.
+
+The candidate selector now writes its current definition digest to a local
+classification dictionary before trying current/historical restoration. Both
+legacy flags compare against that digest. The selected historical Action's
+digest is never used as the current classification authority. The selector's
+ordering, independent mutable Action ownership, parent/auxiliary restore
+checks, validation caches and external snapshot refusals remain exact.
+
+## Executable RED And GREEN
+
+The existing five-Boss legacy fixture now counts live validation-context
+encodings as well as independent Action constructions. Valid RED is
+`build/boss-legacy-digest-context-red`. It has exactly 56 assertion failures,
+all reporting two context encodings where one is required, across current
+and historical Void/Time restoration boundaries. Its stdout SHA-256 is
+`ee5ab995ad72405c0f467fb078461326e9393cabe99d6a5ca8b75b30e3a7aa7c`.
+No script, parse or leak failure explains RED.
+
+GREEN is `build/boss-legacy-digest-context-green`, with stdout SHA-256
+`31d2c6ce473319bd9b389b9f9af5ceb6eea678a637282aa49dd2fed1a3d69f60`.
+Every warm and repeated restore encodes exactly one context. Current actions
+still require one mutable candidate; historical actions require two. Exact
+typed Boss/auxiliary bytes, legacy flags, next-frame outputs, independently
+owned instances, rejection and reconfiguration scenarios pass.
+
+| Regression | Retained directory | Result |
+| --- | --- | --- |
+| Complete five-Boss current/historical classification | `build/boss-legacy-digest-context-green` | Pass |
+| Action validation templates | `build/boss_action_validation_template-boss-digest` | Pass |
+| Complete Boss snapshot validation cache | `build/boss_snapshot_validation_cache-boss-digest` | Pass |
+| Parent and auxiliary restore ownership | `build/boss_parent_restore-boss-digest` | Pass |
+| Native combat physical checkpoint | `build/native_combat_checkpoint-boss-digest` | Pass |
+| Actual Main native cold resume | `build/main_native_resume-boss-digest` | Pass |
+| Native recording snapshot and refusals | `build/native_recording_snapshot-boss-digest` | Pass |
+
+Each of the seven separate stdout/Godot pairs passes the strict runtime
+validator with exact test-suite refusal scopes. Both modified scripts pass
+the pinned GDScript AST parser; `git diff --check` passes. Independent agents
+reviewed the current/historical digest equivalence and the physical RED/GREEN
+logs without rerunning the measured workload. No correctness finding remains.
+The three unchanged project requirements files also pass `pip-audit` with no
+known vulnerabilities; the JSON receipt is
+`build/boss-restore-context-dependency-audit.json`.
+
+## Remaining Work
+
+A new clean diagnostic checkout must measure the optimized source with the
+same admission, Hub, recording and 120-frame parameters. A reduction in
+encoding calls is not itself a net wall-time or 60-FPS certificate. Actual
+uninstrumented rendered performance, worst-case occupancy, sustained RSS,
+the full 45-minute recording, final clean validation and complete UI remain
+open. The previously started native matrix and coverage lanes retain their
+own older source identities and cannot certify this change.

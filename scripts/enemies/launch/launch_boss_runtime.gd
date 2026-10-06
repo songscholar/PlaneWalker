@@ -1115,7 +1115,8 @@ func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray 
 func restore_snapshot(value: Dictionary) -> bool:
 	if not can_restore_snapshot(value):
 		return false
-	var action := _action_for_snapshot(value)
+	var action_classification := {}
+	var action := _action_for_snapshot(value, action_classification)
 	if not action.restore_snapshot(value.action) or not _control.restore_snapshot(value.control) or not _conversion.restore_snapshot(value.conversion):
 		return false
 	if _arena != null and not _arena.restore_snapshot(value.arena_state):
@@ -1133,8 +1134,9 @@ func restore_snapshot(value: Dictionary) -> bool:
 	if _time_auxiliary != null and not _time_auxiliary.restore_snapshot(value.time_auxiliary):
 		return false
 	_action = action
-	_legacy_void_action = _void_arena != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
-	_legacy_time_action = _time_response != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
+	var current_action_digest: String = str(action_classification.get("current_definition_digest", ""))
+	_legacy_void_action = _void_arena != null and value.action.definition_digest != current_action_digest
+	_legacy_time_action = _time_response != null and value.action.definition_digest != current_action_digest
 	_state = _copy_restored_parent_state(value)
 	return true
 
@@ -1262,8 +1264,10 @@ func _make_action(phase_index: int, enraged: bool, room_half: bool = true, curre
 	return result if result.configure({"id": _definition.id, "actor_kind": "boss", "actions": actions}, identity).ok else null
 
 
-func _action_for_snapshot(value: Dictionary) -> RefCounted:
+func _action_for_snapshot(value: Dictionary, classification: Dictionary = {}) -> RefCounted:
 	var current := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged))
+	if (_void_arena != null or _time_response != null) and current != null:
+		classification["current_definition_digest"] = str(current.get("_state").get("definition_digest", ""))
 	if current != null and current.can_restore_snapshot(value.action):
 		return current
 	if _void_arena != null:
