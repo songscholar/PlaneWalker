@@ -82,6 +82,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Content Icons And Player Effects](current/2026-10-06-content-vfx-art-integration-evidence.md) | 117 独立内容图标、18 事件画面、九房间符号与实际玩家特效接入/像素验收 | Focused Verified / Final UI and gameplay certification pending |
 | [Native Hub UI Layout](current/2026-10-06-native-hub-ui-layout-evidence.md) | 九个据点专用页面、滚动/焦点边界与原生布局回归 | Partial milestone / Full UI finish active |
 | [Actor Commit Validation](current/2026-10-06-actor-commit-validation-evidence.md) | 原生提交验证调用收敛、生产物理状态保持与未达标性能实测 | Focused Verified / Sustained FPS gate failed |
+| [Void Checkpoint Projection](current/2026-10-06-void-checkpoint-projection-evidence.md) | 主线程只读历史缓存、线程私有恢复、原生 Save/Replay 回归与局部成本测量 | Focused Verified / Sustained FPS certification pending |
 | [Gameplay Then UI Completion Plan](superpowers/plans/2026-10-06-gameplay-ui-product-completion.md) | 先完成真实玩法认证，再完成整套 UI 和最终本地产品验收 | Active / Current |
 | [Parallel Gameplay Verification](current/2026-10-06-parallel-gameplay-verification-evidence.md) | 四路并行验证、旧任务终态与真实渲染后期 Boss 测量，保留未达标门禁 | Focused Verified / Full gameplay and UI pending |
 | [Native Matrix Resume Evidence](current/2026-10-06-native-matrix-resume-evidence.md) | 原生矩阵逐案例断点续跑、typed 收据恢复和 SIGKILL 后清洁重试 | Focused Verified / Full matrix pending |
