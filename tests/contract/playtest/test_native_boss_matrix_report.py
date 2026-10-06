@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
+import json
+from contextlib import redirect_stderr
 from pathlib import Path
 import sys
 import tempfile
@@ -37,6 +40,125 @@ def valid_row(index: int) -> dict:
 
 
 class NativeBossMatrixReportTest(unittest.TestCase):
+    def test_partial_receipts_require_exact_source_range_and_unique_prefix(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        binding = {"aggregate_sha256": "c" * 64, "packs": [{"pack_id": "base", "pack_version": "0.4.0-dev", "schema_version": 2, "fingerprint_sha256": "d" * 64}]}
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            partial = Path(directory) / "partial.json"
+            case = partial.parent / "cases/case-000000.json"
+            case.parent.mkdir()
+            receipt = {"schema_version": 1, "report_kind": "actual_native_boss_loadout_case", "source": source, "content_snapshot": binding, "row": valid_row(0), "typed_row": "opaque typed payload checked by the native producer"}
+            case.write_text(json.dumps(receipt), encoding="utf-8")
+            manifest = {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": False, "source": source, "content_snapshot": binding, "clock": {"physics_ticks_per_second": 60, "time_scale": 1.0}, "partial": True, "complete": False, "range_start": 0, "requested_case_count": 2, "production_case_count": 1, "case_receipts": [{"index": 0, "path": "cases/case-000000.json", "sha256": hashlib.sha256(case.read_bytes()).hexdigest()}]}
+            partial.write_text(json.dumps(manifest), encoding="utf-8")
+            report, errors = matrix.read_partial_report(partial, 0, 2, source)
+            self.assertEqual(errors, [])
+            self.assertEqual(report["cases"], [valid_row(0)])
+            for changes in ({"source": {**source, "revision": "e" * 40}}, {"requested_case_count": 3}, {"complete": True}, {"case_receipts": manifest["case_receipts"] * 2}, {"production_case_count": 2}):
+                changed = {**manifest, **changes}
+                partial.write_text(json.dumps(changed), encoding="utf-8")
+                with self.subTest(changes=changes):
+                    self.assertTrue(matrix.read_partial_report(partial, 0, 2, source)[1])
+            partial.write_text(json.dumps(manifest), encoding="utf-8")
+            case.write_text(json.dumps({**receipt, "row": valid_row(1)}), encoding="utf-8")
+            self.assertTrue(matrix.read_partial_report(partial, 0, 2, source)[1])
+
+    def test_failed_partial_is_retained_but_cannot_be_resumed(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        row = valid_row(0)
+        row["failures"] = ["actual frame refusal"]
+        report = {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": False, "partial": True, "complete": False, "range_start": 0, "requested_case_count": 2, "source": source, "clock": {"physics_ticks_per_second": 60, "time_scale": 1.0}, "content_snapshot": {"aggregate_sha256": "c" * 64, "packs": [{"pack_id": "base", "pack_version": "0.4.0-dev", "schema_version": 2, "fingerprint_sha256": "d" * 64}]}, "cases": [row]}
+        rows, errors = matrix._validate_partial_report(report, 0, 2, source)
+        self.assertEqual(rows, [])
+        self.assertTrue(any("actual frame refusal" in error for error in errors))
+
+    def test_resume_rejection_never_runs_or_imports_foreign_rows(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            logs = Path(directory)
+            with patch.object(matrix.subprocess, "run") as run:
+                result = matrix.run_shard("unused-godot", 0, 2, logs, 10, expected_source={"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}, resume=True)
+            run.assert_not_called()
+            self.assertEqual(result["report"], {})
+            self.assertTrue(result["errors"])
+
+    def test_partial_paths_and_duplicate_json_fields_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            outside = root / "outside"
+            outside.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(outside, target_is_directory=True)
+            (outside / "partial.json").write_text('{"case_receipts": []}', encoding="utf-8")
+            self.assertTrue(matrix.read_partial_report(linked / "partial.json", 0, 1, {})[1])
+            duplicate = root / "duplicate.json"
+            duplicate.write_text('{"schema_version": 3, "schema_version": 1}', encoding="utf-8")
+            self.assertIsNone(matrix._read_json(duplicate))
+
+    def test_dirty_sources_cannot_claim_the_head_commit(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            path = Path(directory) / "foreign.gd"
+            path.write_text("extends RefCounted\n", encoding="utf-8")
+            sources = {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()}
+            source = matrix.source_identity(sources)
+            self.assertTrue(matrix.validate_committed_source(sources, source["revision"]))
+
+    def test_cli_refuses_dirty_source_before_launch_or_evidence_writes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            path = root / "foreign.gd"
+            path.write_text("extends RefCounted\n", encoding="utf-8")
+            sources = {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()}
+            output = root / "output/report.json"
+            logs = root / "logs"
+            stderr = io.StringIO()
+            with patch.object(matrix, "source_snapshot", return_value=sources), patch.object(matrix.shutil, "which", return_value="unused-godot"), patch.object(matrix, "run_shard") as launch, patch.object(matrix, "_write_json_atomic") as write, redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as rejected:
+                    matrix.main(["--output", str(output), "--logs", str(logs), "--jobs", "1", "--count", "1"])
+            self.assertEqual(rejected.exception.code, 2)
+            self.assertIn("native certification source differs from commit", stderr.getvalue())
+            launch.assert_not_called()
+            write.assert_not_called()
+            self.assertFalse(output.exists())
+            self.assertFalse(logs.exists())
+
+    def test_resume_requires_source_bound_strict_paired_attempt_logs(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            attempt = root / "attempts/000"
+            attempt.mkdir(parents=True)
+            matrix._write_json_atomic(attempt / "execution.json", {"source": source, "status": "running"})
+            (attempt / "godot.log").write_text("clean engine\n", encoding="utf-8")
+            self.assertTrue(matrix._validate_attempt_logs(root, source))
+            (attempt / "stdout.log").write_text("clean stdout\n", encoding="utf-8")
+            self.assertEqual(matrix._validate_attempt_logs(root, source), [])
+            (attempt / "stdout.log").write_text("ERROR: hidden error\n", encoding="utf-8")
+            self.assertTrue(matrix._validate_attempt_logs(root, source))
+            self.assertTrue(matrix._validate_attempt_logs(root, {**source, "revision": "c" * 40}))
+
+    def test_timeout_keeps_incomplete_case_data_and_error_semantics(self) -> None:
+        source = {"runtime_source_sha256": "a" * 64, "revision": "b" * 40, "instrumented": False}
+        binding = {"aggregate_sha256": "c" * 64, "packs": [{"pack_id": "base", "pack_version": "0.4.0-dev", "schema_version": 2, "fingerprint_sha256": "d" * 64}]}
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            logs = Path(directory)
+            partial = logs / "native-000-002/partial.json"
+            def expire(*args: object, **kwargs: object) -> None:
+                kwargs["stdout"].write("completed case0\n")
+                (partial.parent / "attempts/000/godot.log").write_text("completed case0\n", encoding="utf-8")
+                case = partial.parent / "cases/case-000000.json"
+                case.parent.mkdir()
+                receipt = {"schema_version": 1, "report_kind": "actual_native_boss_loadout_case", "source": source, "content_snapshot": binding, "row": valid_row(0), "typed_row": "typed"}
+                case.write_text(json.dumps(receipt), encoding="utf-8")
+                partial.write_text(json.dumps({"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": False, "source": source, "content_snapshot": binding, "clock": {"physics_ticks_per_second": 60, "time_scale": 1.0}, "partial": True, "complete": False, "range_start": 0, "requested_case_count": 2, "production_case_count": 1, "case_receipts": [{"index": 0, "path": "cases/case-000000.json", "sha256": hashlib.sha256(case.read_bytes()).hexdigest()}]}), encoding="utf-8")
+                raise matrix.subprocess.TimeoutExpired("godot", 10)
+            with patch.object(matrix.subprocess, "run", side_effect=expire):
+                result = matrix.run_shard("unused-godot", 0, 2, logs, 10, expected_source=source)
+            self.assertEqual(result["report"]["cases"], [valid_row(0)])
+            self.assertIn("Godot exited124", result["errors"])
+            self.assertIn("native shard timed out after10s", result["errors"])
+            self.assertIn("native shard emitted only a partial report; process completion is unverified", result["errors"])
+
+
     def test_all_canonical_identities_are_distinct(self) -> None:
         identities = [matrix.identity(index) for index in range(750)]
         self.assertEqual(len({identity["key"] for identity in identities}), 750)

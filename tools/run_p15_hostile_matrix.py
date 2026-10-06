@@ -17,6 +17,8 @@ import subprocess
 import sys
 import time
 
+from runtime_log_validation import validate_logs
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENE = "res://tests/smoke/p15_hostile_loadout_matrix_test.tscn"
@@ -40,8 +42,54 @@ def bounded_integer(value: object, minimum: int, maximum: int) -> bool:
 
 def source_snapshot() -> dict[str, str]:
     paths = [path for directory in ("scripts", "autoload", "tests/support") for path in (ROOT / directory).rglob("*.gd")]
-    paths.extend((ROOT / "tools/run_p15_hostile_matrix.py", ROOT / "tests/smoke/p15_hostile_loadout_matrix_test.gd", ROOT / "project.godot"))
+    paths.extend(path for path in (ROOT / "scenes").rglob("*.tscn"))
+    paths.extend(path for path in (ROOT / "data/content_packs/base").rglob("*") if path.is_file() and not path.name.endswith((".uid", ".import", ".translation")))
+    paths.extend((ROOT / "tools/run_p15_hostile_matrix.py", ROOT / "tools/runtime_log_validation.py", ROOT / "tests/smoke/p15_hostile_loadout_matrix_test.gd", ROOT / "tests/smoke/p15_hostile_loadout_matrix_test.tscn", ROOT / "project.godot"))
     return {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)}
+
+
+def source_identity(sources: dict[str, str], revision_override: str | None = None) -> dict[str, object]:
+    revision = subprocess.run(
+        ["git", "rev-parse", revision_override or "HEAD"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return {
+        "runtime_source_sha256": hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        "revision": revision.stdout.strip() if revision.returncode == 0 else "",
+        "instrumented": False,
+    }
+
+
+def validate_committed_source(sources: dict[str, str], revision: str) -> list[str]:
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        return ["native certification requires a resolved Git source commit"]
+    tree = subprocess.run(["git", "ls-tree", "-rz", revision], cwd=ROOT, capture_output=True, check=False)
+    if tree.returncode:
+        return ["native certification source commit is unavailable"]
+    blobs = {}
+    for entry in tree.stdout.split(b"\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split(b"\t", 1)
+        mode, kind, digest = metadata.split(b" ", 2)
+        if kind == b"blob" and mode != b"120000":
+            blobs[name.decode()] = digest.decode()
+    errors = []
+    for path in sources:
+        payload = (ROOT / path).read_bytes()
+        actual = hashlib.sha1(b"blob " + str(len(payload)).encode() + b"\0" + payload).hexdigest()
+        if blobs.get(path) != actual:
+            errors.append(f"native certification source differs from commit: {path}")
+    return errors
+
+
+def validate_source_identity(value: object, expected: dict[str, object]) -> list[str]:
+    if not isinstance(value, dict) or set(value) != {"runtime_source_sha256", "revision", "instrumented"} or value.get("instrumented") is not False or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("runtime_source_sha256", ""))) or not re.fullmatch(r"[0-9a-f]{40}", str(value.get("revision", ""))) or value != expected:
+        return ["native shard source identity does not match the current executable source"]
+    return []
 
 
 @lru_cache(maxsize=1)
@@ -201,37 +249,235 @@ def validate_cases(rows: object, start: int, count: int) -> list[str]:
     return errors
 
 
-def run_shard(godot: str, start: int, count: int, logs: Path, timeout: int) -> dict[str, object]:
+def _read_json(path: Path) -> dict[str, object] | None:
+    def unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate JSON field")
+            result[key] = value
+        return result
+
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_fields)
+    except (OSError, UnicodeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _write_json_atomic(path: Path, value: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as destination:
+        destination.write(json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n")
+        destination.flush()
+        os.fsync(destination.fileno())
+    temporary.replace(path)
+
+
+def _validate_attempt_logs(directory: Path, expected_source: dict[str, object]) -> list[str]:
+    errors = []
+    attempts = sorted(path for path in (directory / "attempts").glob("*") if path.is_dir())
+    if (directory / "godot.log").exists() or (directory / "stdout.log").exists():
+        attempts.append(directory)
+    if not attempts:
+        errors.append("native resume has no retained execution logs")
+    for attempt in attempts:
+        execution = _read_json(attempt / "execution.json")
+        if not execution or execution.get("source") != expected_source or execution.get("status") not in ("running", "finished", "timed_out"):
+            errors.append("native attempt execution source identity is missing or substituted")
+        try:
+            validate_logs([attempt / "stdout.log", attempt / "godot.log"])
+        except ValueError as error:
+            errors.append(f"native attempt strict paired logs refused: {error}")
+    return errors
+
+
+def _validate_partial_report(
+    report: object,
+    start: int,
+    count: int,
+    expected_source: dict[str, object],
+) -> tuple[list[dict[str, object]], list[str]]:
+    if not isinstance(report, dict):
+        return [], ["native resume partial report is missing or malformed"]
+    errors: list[str] = []
+    if report.get("schema_version") != REPORT_VERSION or report.get("report_kind") != "actual_native_boss_loadout_matrix" or report.get("synthetic") is not False:
+        errors.append("native resume partial provenance is missing")
+    if report.get("partial") is not True or report.get("complete") is not False:
+        errors.append("native resume requires an explicitly incomplete partial report")
+    if type(report.get("range_start")) is not int or type(report.get("requested_case_count")) is not int or report.get("range_start") != start or report.get("requested_case_count") != count:
+        errors.append("native resume partial range does not match the requested shard")
+    errors.extend(validate_source_identity(report.get("source"), expected_source))
+    errors.extend(validate_content_snapshot(report.get("content_snapshot")))
+    clock = report.get("clock")
+    if not isinstance(clock, dict) or set(clock) != {"physics_ticks_per_second", "time_scale"} or type(clock.get("physics_ticks_per_second")) is not int or clock["physics_ticks_per_second"] != 60 or type(clock.get("time_scale")) not in (int, float) or clock["time_scale"] != 1.0:
+        errors.append("native resume partial clock differs from production60Hz")
+    rows = report.get("cases")
+    if not isinstance(rows, list) or len(rows) > count:
+        errors.append("native resume partial case count is outside the requested range")
+        return [], errors
+    if not errors:
+        errors.extend(validate_cases(rows, start, len(rows)))
+    return rows if not errors else [], errors
+
+
+def read_partial_report(
+    path: Path,
+    start: int,
+    count: int,
+    expected_source: dict[str, object],
+) -> tuple[dict[str, object], list[str]]:
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+        return {}, ["native partial path must not redirect outside its retained shard"]
+    manifest = _read_json(path)
+    if manifest is None:
+        return {}, ["native partial manifest is missing or malformed"]
+    errors: list[str] = []
+    descriptors = manifest.get("case_receipts")
+    rows: list[dict[str, object]] = []
+    if not isinstance(descriptors, list) or len(descriptors) > count:
+        return {}, ["native partial receipt count is outside the requested range"]
+    for offset, descriptor in enumerate(descriptors):
+        index = start + offset
+        expected_path = f"cases/case-{index:06d}.json"
+        if not isinstance(descriptor, dict) or set(descriptor) != {"index", "path", "sha256"} or type(descriptor.get("index")) is not int or descriptor["index"] != index or descriptor.get("path") != expected_path or not re.fullmatch(r"[0-9a-f]{64}", str(descriptor.get("sha256", ""))):
+            errors.append(f"native partial case{index} has a duplicate, foreign or reordered descriptor")
+            continue
+        receipt_path = path.parent / expected_path
+        if any(candidate.is_symlink() for candidate in (receipt_path, *receipt_path.parents)) or not receipt_path.is_file() or not receipt_path.resolve().is_relative_to(path.parent.resolve()) or hashlib.sha256(receipt_path.read_bytes()).hexdigest() != descriptor["sha256"]:
+            errors.append(f"native partial case{index} receipt is missing, redirected or changed")
+            continue
+        receipt = _read_json(receipt_path)
+        if receipt is None or receipt.get("schema_version") != 1 or receipt.get("report_kind") != "actual_native_boss_loadout_case" or receipt.get("source") != expected_source or receipt.get("content_snapshot") != manifest.get("content_snapshot") or not isinstance(receipt.get("typed_row"), str) or not receipt["typed_row"] or not isinstance(receipt.get("row"), dict):
+            errors.append(f"native partial case{index} receipt provenance is missing or substituted")
+            continue
+        rows.append(receipt["row"])
+    if type(manifest.get("production_case_count")) is not int or manifest.get("production_case_count") != len(descriptors):
+        errors.append("native partial manifest count does not match its receipt descriptors")
+    result = {**manifest, "cases": rows}
+    if not errors:
+        _, errors = _validate_partial_report(result, start, count, expected_source)
+    return result, errors
+
+
+def run_shard(
+    godot: str,
+    start: int,
+    count: int,
+    logs: Path,
+    timeout: int,
+    *,
+    expected_source: dict[str, object] | None = None,
+    resume: bool = False,
+) -> dict[str, object]:
     directory = logs / f"native-{start:03d}-{count:03d}"
     directory.mkdir(parents=True, exist_ok=True)
     report_path = directory / "report.json"
+    partial_path = directory / "partial.json"
+    expected_source = expected_source or source_identity(source_snapshot())
+    resume_rows: list[dict[str, object]] = []
+    resume_errors: list[str] = []
+    if resume:
+        if not partial_path.is_file():
+            resume_errors.append("native resume requested but its source-bound partial report is missing")
+        else:
+            partial, resume_errors = read_partial_report(partial_path, start, count, expected_source)
+            resume_rows = partial.get("cases", []) if not resume_errors else []
+            committed = {str(descriptor["path"]) for descriptor in partial.get("case_receipts", [])} if not resume_errors else set()
+            for receipt_path in (directory / "cases").glob("case-*.json"):
+                relative = receipt_path.relative_to(directory).as_posix()
+                if relative in committed:
+                    continue
+                next_index = start + len(resume_rows)
+                receipt = _read_json(receipt_path)
+                if relative != f"cases/case-{next_index:06d}.json" or any(candidate.is_symlink() for candidate in (receipt_path, *receipt_path.parents)) or not receipt or receipt.get("source") != expected_source or validate_cases([receipt.get("row")], next_index, 1):
+                    resume_errors.append("native resume has an uncommitted foreign or failed case receipt")
+                # A valid uncommitted receipt is preserved by the producer and rerun.
+    elif partial_path.exists() or report_path.exists():
+        resume_errors.append("native shard output already exists; use --resume to avoid mixing prior evidence")
+    if resume:
+        resume_errors.extend(_validate_attempt_logs(directory, expected_source))
+    if any(candidate.is_symlink() for candidate in (directory, *directory.parents)):
+        resume_errors.append("native shard directory must not redirect its evidence")
+    if resume_errors:
+        return {
+            "range_start": start,
+            "requested_case_count": count,
+            "duration_seconds": 0.0,
+            "logs": str(directory.relative_to(ROOT)),
+            "errors": resume_errors,
+            "report": {},
+        }
+    resumed_count = len(resume_rows)
+    effective_start = start + resumed_count
+    effective_count = count - resumed_count
     environment = os.environ.copy()
-    environment.update({"PLANEWALKER_MATRIX_START": str(start), "PLANEWALKER_MATRIX_COUNT": str(count), "PLANEWALKER_MATRIX_OUTPUT": str(report_path), "PLANEWALKER_TEST_DATA_DIR": str(directory / "user-data"), "XDG_DATA_HOME": str(directory / "user-data"), "XDG_CACHE_HOME": str(directory / "cache")})
-    command = [godot, "--headless", "--fixed-fps", "60", "--path", str(ROOT), "--log-file", str(directory / "godot.log"), SCENE]
+    environment.update({
+        "PLANEWALKER_MATRIX_START": str(effective_start),
+        "PLANEWALKER_MATRIX_COUNT": str(effective_count),
+        "PLANEWALKER_MATRIX_REQUESTED_START": str(start),
+        "PLANEWALKER_MATRIX_REQUESTED_COUNT": str(count),
+        "PLANEWALKER_MATRIX_OUTPUT": str(report_path),
+        "PLANEWALKER_MATRIX_PARTIAL_OUTPUT": str(partial_path),
+        "PLANEWALKER_MATRIX_RESUME_INPUT": str(partial_path) if resume_rows else "",
+        "PLANEWALKER_MATRIX_SOURCE_SHA256": str(expected_source["runtime_source_sha256"]),
+        "PLANEWALKER_MATRIX_SOURCE_REVISION": str(expected_source["revision"]),
+        "PLANEWALKER_TEST_DATA_DIR": str(directory / "user-data"),
+        "XDG_DATA_HOME": str(directory / "user-data"),
+        "XDG_CACHE_HOME": str(directory / "user-data"),
+    })
+    attempts = directory / "attempts"
+    attempts.mkdir(exist_ok=True)
+    attempt_number = 0
+    while (attempts / f"{attempt_number:03d}").exists():
+        attempt_number += 1
+    attempt = attempts / f"{attempt_number:03d}"
+    attempt.mkdir()
+    if report_path.exists():
+        report_path.replace(attempt / "prior-report.json")
+    command = [godot, "--headless", "--fixed-fps", "60", "--path", str(ROOT), "--log-file", str(attempt / "godot.log"), SCENE]
     started = time.monotonic()
-    try:
-        completed = subprocess.run(command, cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
-        output = completed.stdout
-        code = completed.returncode
-    except subprocess.TimeoutExpired as error:
-        output = error.stdout.decode(errors="replace") if isinstance(error.stdout, bytes) else error.stdout or ""
-        code = 124
-    (directory / "stdout.log").write_text(output, encoding="utf-8")
-    try:
-        report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
-    except (OSError, ValueError):
-        report = {}
-    if not isinstance(report, dict):
-        report = {}
-    errors = validate_cases(report.get("cases"), start, count)
+    timed_out = False
+    execution = {"source": expected_source, "range_start": start, "requested_case_count": count, "resumed_case_count": resumed_count, "timeout_seconds": timeout, "command": command, "status": "running"}
+    _write_json_atomic(attempt / "execution.json", execution)
+    with (attempt / "stdout.log").open("w", encoding="utf-8") as stdout_file:
+        try:
+            completed_process = subprocess.run(command, cwd=ROOT, env=environment, text=True, stdout=stdout_file, stderr=subprocess.STDOUT, timeout=timeout, check=False)
+            code = completed_process.returncode
+        except subprocess.TimeoutExpired:
+            code = 124
+            timed_out = True
+        stdout_file.flush()
+        os.fsync(stdout_file.fileno())
+    output = (attempt / "stdout.log").read_text(encoding="utf-8", errors="replace")
+    execution.update(status="timed_out" if timed_out else "finished", exit_code=code, duration_seconds=time.monotonic() - started)
+    _write_json_atomic(attempt / "execution.json", execution)
+    report = _read_json(report_path)
+    partial_errors: list[str] = []
+    if report is None:
+        report, partial_errors = read_partial_report(partial_path, start, count, expected_source) if partial_path.exists() else ({}, [])
+    report_rows = report.get("cases")
+    actual_count = len(report_rows) if isinstance(report_rows, list) else count
+    errors = validate_cases(report_rows, start, count if report.get("partial") is not True else actual_count)
+    if resume_rows and (not isinstance(report_rows, list) or report_rows[:resumed_count] != resume_rows):
+        errors.insert(0, "native resumed shard discarded or reordered previously persisted cases")
     if code:
         errors.insert(0, f"Godot exited{code}")
-    engine_log = directory / "godot.log"
-    engine_output = engine_log.read_text(encoding="utf-8", errors="replace") if engine_log.exists() else ""
+    if timed_out:
+        errors.insert(0, f"native shard timed out after{timeout}s")
+    errors.extend(partial_errors)
+    errors.extend(_validate_attempt_logs(directory, expected_source))
+    engine_output = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in directory.rglob("*.log"))
     if ERROR.search(output) or ERROR.search(engine_output):
         errors.insert(0, "Godot contains an error, orphan or leak diagnostic")
     if report.get("schema_version") != REPORT_VERSION or report.get("report_kind") != "actual_native_boss_loadout_matrix" or report.get("synthetic") is not False:
         errors.append("native shard provenance is missing")
+    if report.get("partial") is True:
+        errors.append("native shard emitted only a partial report; process completion is unverified")
+    if report.get("range_start") != start or report.get("requested_case_count") != count:
+        errors.append("native shard report range does not match the requested shard")
+    errors.extend(validate_source_identity(report.get("source"), expected_source))
     clock = report.get("clock")
     if not isinstance(clock, dict) or set(clock) != {"physics_ticks_per_second", "time_scale"} or type(clock["physics_ticks_per_second"]) is not int or clock["physics_ticks_per_second"] != 60 or type(clock["time_scale"]) not in (int, float) or clock["time_scale"] != 1.0:
         errors.append("native matrix must retain the production60Hz clock and time scale")
@@ -250,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=int, default=7200)
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--count", type=int, default=CASE_COUNT)
+    parser.add_argument("--resume", action="store_true", help="resume only canonical passed case receipts from the same exact committed source")
+    parser.add_argument("--source-revision", help="explicit Git source commit for a frozen checkout without its own .git directory")
     args = parser.parse_args(argv)
     if (args.seed_count, args.loadout_count, args.boss_count) != (30, 150, 5):
         parser.error("canonical counts are30 seeds,150 loadouts and5 Bosses")
@@ -265,10 +513,23 @@ def main(argv: list[str] | None = None) -> int:
     chunk = (args.count + args.jobs - 1) // args.jobs
     ranges = [(start, min(chunk, args.start + args.count - start)) for start in range(args.start, args.start + args.count, chunk)]
     sources = source_snapshot()
+    source = source_identity(sources, args.source_revision)
+    source_errors = validate_committed_source(sources, str(source["revision"]))
+    if source_errors:
+        parser.error("; ".join(source_errors[:5]))
+    manifest_path = logs / "source-manifest.json"
+    if args.resume:
+        retained_sources = _read_json(manifest_path)
+        if retained_sources != {"source": source, "runtime_files_sha256": sources}:
+            parser.error("resume source manifest is missing or differs from the exact current committed source")
+    else:
+        if manifest_path.exists():
+            parser.error("matrix logs already retain a source manifest; use --resume or a fresh evidence directory")
+        _write_json_atomic(manifest_path, {"source": source, "runtime_files_sha256": sources})
     started = time.monotonic()
     shards = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(run_shard, godot, start, count, logs, args.timeout) for start, count in ranges]
+        futures = [pool.submit(run_shard, godot, start, count, logs, args.timeout, expected_source=source, resume=args.resume) for start, count in ranges]
         for future in as_completed(futures):
             shard = future.result()
             shards.append(shard)
@@ -282,11 +543,10 @@ def main(argv: list[str] | None = None) -> int:
         errors.append("native shards ran different content fingerprints")
     if source_snapshot() != sources:
         errors.append("native runtime or runner sources changed during certification")
-    source = {"runtime_source_sha256": hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "instrumented": False}
     result = {"schema_version": REPORT_VERSION, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": False, "human_playtests": 0, "difficulty": "normal", "unassisted_victory": False, "survival_fixture": "p15_matrix_survival_fixture", "clock": shards[0]["report"].get("clock", {}) if shards else {}, "content_snapshot": snapshots[0] if snapshots else {}, "range_start": args.start, "requested_case_count": args.count, "expected_production_case_count": CASE_COUNT, "production_case_count": len(rows), "native_complete": args.start == 0 and args.count == CASE_COUNT and not errors, "p15_complete": False, "synthetic_case_count": 0, "expected_synthetic_case_count": 22500, "errors": errors, "shards": [{key: value for key, value in shard.items() if key != "report"} for shard in shards], "cases": rows}
     result.update(source=source, duration_seconds=time.monotonic() - started)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json_atomic(output, result)
     print(f"actual native cases{len(rows)}/{args.count}; errors{len(errors)}; report{output}", flush=True)
     return int(bool(errors))
 

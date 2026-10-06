@@ -19,6 +19,8 @@ var _suite: RefCounted
 var _registry: RefCounted
 var _catalog: RefCounted
 var _binding: Dictionary
+var _source: Dictionary
+var _case_receipts: Array[Dictionary] = []
 
 
 func run(host: Node, suite: RefCounted) -> Dictionary:
@@ -34,8 +36,12 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	_binding = Content.snapshot(_registry)
 	var start := int(OS.get_environment("PLANEWALKER_MATRIX_START"))
 	var count := int(OS.get_environment("PLANEWALKER_MATRIX_COUNT")) if not OS.get_environment("PLANEWALKER_MATRIX_COUNT").is_empty() else 1
-	_suite.assert_true(start >= 0 and count > 0 and start + count <= CASE_COUNT, "native matrix range is bounded by750 canonical cases")
-	if start < 0 or count < 1 or start + count > CASE_COUNT:
+	var requested_start := start if OS.get_environment("PLANEWALKER_MATRIX_REQUESTED_START").is_empty() else int(OS.get_environment("PLANEWALKER_MATRIX_REQUESTED_START"))
+	var requested_count := count if OS.get_environment("PLANEWALKER_MATRIX_REQUESTED_COUNT").is_empty() else int(OS.get_environment("PLANEWALKER_MATRIX_REQUESTED_COUNT"))
+	_source = {"runtime_source_sha256": OS.get_environment("PLANEWALKER_MATRIX_SOURCE_SHA256"), "revision": OS.get_environment("PLANEWALKER_MATRIX_SOURCE_REVISION"), "instrumented": false}
+	_case_receipts.clear()
+	_suite.assert_true(start >= 0 and count >= 0 and requested_count > 0 and start + count == requested_start + requested_count and start + count <= CASE_COUNT, "native matrix range is bounded by750 canonical cases")
+	if start < 0 or count < 0 or requested_count < 1 or start + count != requested_start + requested_count or start + count > CASE_COUNT:
 		return {}
 	var old_ticks := Engine.physics_ticks_per_second
 	var old_fps := Engine.max_fps
@@ -45,10 +51,20 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	Engine.time_scale = 1.0
 	var clock := {"physics_ticks_per_second": Engine.physics_ticks_per_second, "time_scale": Engine.time_scale}
 	var rows: Array[Dictionary] = []
+	var resume_input := OS.get_environment("PLANEWALKER_MATRIX_RESUME_INPUT")
+	if not resume_input.is_empty() and not _load_resume(resume_input, requested_start, requested_count, start, rows):
+		_suite.assert_true(false, "native resume requires exact typed source-bound prior case receipts")
+		return {}
+	if not _persist_partial(requested_start, requested_count, clock):
+		_suite.assert_true(false, "native matrix persists its source-bound empty partial before gameplay")
+		return {}
 	for index: int in range(start, start + count):
 		_suite.assert_true(Engine.physics_ticks_per_second == 60 and Engine.time_scale == 1.0, "every native case retains the production60Hz physical clock")
 		var row := await _run_case(_identity(index))
 		rows.append(row)
+		if not _persist_case(row, requested_start, requested_count, clock):
+			_suite.assert_true(false, "native matrix atomically persists every completed case before continuing")
+			break
 		_suite.assert_true(row.failures.is_empty(), "native matrix " + str(row.identity) + ": " + str(row.failures))
 		print("P15_NATIVE_CASE ", index + 1, "/750 ", row.identity.key, " frames=", row.frames, " hp=", row.final_hp, " failures=", row.failures.size())
 		if not row.failures.is_empty():
@@ -56,17 +72,92 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	Engine.physics_ticks_per_second = old_ticks
 	Engine.max_fps = old_fps
 	Engine.time_scale = old_scale
-	var report := {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": start, "requested_case_count": count, "complete": start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
+	var report := {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "source": _source, "partial": false, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": requested_start, "requested_case_count": requested_count, "complete": requested_start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
 	var output := OS.get_environment("PLANEWALKER_MATRIX_OUTPUT")
 	if output.is_empty():
 		output = "res://build/p15-native-boss-matrix.json"
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output.get_base_dir()))
-	var file := FileAccess.open(output, FileAccess.WRITE)
-	_suite.assert_true(file != null, "native matrix retains its actual versioned JSON report")
-	if file != null:
-		file.store_string(JSON.stringify(report, "\t", true, true) + "\n")
-	_suite.assert_equal(rows.size(), count, "native matrix executes every requested actual case without substituting fixtures")
+	_suite.assert_true(_write_atomic(output, report), "native matrix retains its actual versioned JSON report")
+	_suite.assert_equal(rows.size(), requested_count, "native matrix executes every requested actual case without substituting fixtures")
 	return report
+
+
+func _persist_case(row: Dictionary, start: int, count: int, clock: Dictionary) -> bool:
+	var partial_output := OS.get_environment("PLANEWALKER_MATRIX_PARTIAL_OUTPUT")
+	if partial_output.is_empty():
+		return true
+	var encoded := Replay.encode_replay_json({"row": row})
+	if not encoded.ok:
+		return false
+	var index := int(row.identity.index)
+	var relative := "cases/case-%06d.json" % index
+	var path := partial_output.get_base_dir().path_join(relative)
+	var receipt := {"schema_version": 1, "report_kind": "actual_native_boss_loadout_case", "source": _source, "content_snapshot": _binding, "row": row, "typed_row": encoded.json}
+	if FileAccess.file_exists(path):
+		var orphan := path + ".orphan." + FileAccess.get_file_as_string(path).sha256_text()
+		if DirAccess.rename_absolute(path, orphan) != OK:
+			return false
+	if not _write_atomic(path, receipt):
+		return false
+	_case_receipts.append({"index": index, "path": relative, "sha256": FileAccess.get_file_as_string(path).sha256_text()})
+	return _persist_partial(start, count, clock)
+
+
+func _persist_partial(start: int, count: int, clock: Dictionary) -> bool:
+	var partial_output := OS.get_environment("PLANEWALKER_MATRIX_PARTIAL_OUTPUT")
+	if partial_output.is_empty():
+		return true
+	var manifest := {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "source": _source, "partial": true, "complete": false, "range_start": start, "requested_case_count": count, "production_case_count": _case_receipts.size(), "case_receipts": _case_receipts}
+	return _write_atomic(partial_output, manifest)
+
+
+func _load_resume(path: String, start: int, count: int, next_index: int, rows: Array[Dictionary]) -> bool:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not parsed is Dictionary:
+		return false
+	var manifest: Dictionary = parsed
+	if manifest.get("source") != _source or not _matches_json(_binding, manifest.get("content_snapshot")) or manifest.get("range_start") != start or manifest.get("requested_case_count") != count or manifest.get("partial") != true or manifest.get("complete") != false or not manifest.get("case_receipts") is Array or manifest.case_receipts.size() != next_index - start:
+		return false
+	for offset: int in range(manifest.case_receipts.size()):
+		var descriptor: Variant = manifest.case_receipts[offset]
+		var index := start + offset
+		var relative := "cases/case-%06d.json" % index
+		if not descriptor is Dictionary or descriptor.get("index") != index or descriptor.get("path") != relative:
+			return false
+		var receipt_text := FileAccess.get_file_as_string(path.get_base_dir().path_join(relative))
+		if receipt_text.sha256_text() != descriptor.get("sha256"):
+			return false
+		var receipt: Variant = JSON.parse_string(receipt_text)
+		if not receipt is Dictionary or receipt.get("source") != _source or not _matches_json(_binding, receipt.get("content_snapshot")) or not receipt.get("typed_row") is String:
+			return false
+		var decoded := Replay.decode_replay_json(receipt.typed_row)
+		if not decoded.ok or not decoded.replay.get("row") is Dictionary:
+			return false
+		var row: Dictionary = decoded.replay.row
+		if not _matches_json(row, receipt.get("row")) or row.get("identity") != _identity(index) or row.get("failures") != []:
+			return false
+		rows.append(row)
+		_case_receipts.append({"index": index, "path": relative, "sha256": str(descriptor.sha256)})
+	return true
+
+
+static func _matches_json(value: Dictionary, parsed: Variant) -> bool:
+	# JSON numbers lose Variant integer types; the typed codec remains authority.
+	return parsed is Dictionary and JSON.parse_string(JSON.stringify(value, "", true, true)) == parsed
+
+
+static func _write_atomic(path: String, value: Dictionary) -> bool:
+	var absolute := ProjectSettings.globalize_path(path)
+	if DirAccess.make_dir_recursive_absolute(absolute.get_base_dir()) != OK:
+		return false
+	var temporary := absolute + ".tmp"
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(value, "\t", true, true) + "\n")
+	file.flush()
+	var error := file.get_error()
+	file.close()
+	return error == OK and DirAccess.rename_absolute(temporary, absolute) == OK
 
 
 static func _identity(index: int) -> Dictionary:
