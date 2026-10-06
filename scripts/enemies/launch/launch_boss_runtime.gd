@@ -1064,7 +1064,7 @@ func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray 
 	if context.is_empty():
 		context = _snapshot_validation_context()
 	var action := _validation_action_for_snapshot(value, context)
-	if action.is_empty() or not _validation_action_matches(action, value.action) or not _control.can_restore_snapshot(value.control):
+	if action.is_empty() or not _control.can_restore_snapshot(value.control):
 		return false
 	if _time_response != null and not value.time_response.active.is_empty() and value.time_response.active.attack_generation >= int(value.action.next_generation_floor):
 		return false
@@ -1286,6 +1286,7 @@ func _validation_action_matches(template: Dictionary, value: Dictionary) -> bool
 
 
 func _validation_action_for_snapshot(value: Dictionary, context: PackedByteArray) -> Dictionary:
+	# Each returned template has already passed complete Action validation.
 	var phase_index := int(value.mechanism_state.action_phase_index)
 	var enraged: bool = value.mechanism_state.action_enraged
 	var template := _action_validation_template(phase_index, enraged, true, true, context)

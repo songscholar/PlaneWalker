@@ -11,10 +11,15 @@ var suite: RefCounted
 
 class CountingBoss extends "res://scripts/enemies/launch/launch_boss_runtime.gd":
 	var fresh_action_calls := 0
+	var action_validation_calls := 0
 
 	func _make_action(phase_index: int, enraged: bool, room_half: bool = true, current_time_responses: bool = true) -> RefCounted:
 		fresh_action_calls += 1
 		return super._make_action(phase_index, enraged, room_half, current_time_responses)
+
+	func _validation_action_matches(template: Dictionary, value: Dictionary) -> bool:
+		action_validation_calls += 1
+		return super._validation_action_matches(template, value)
 
 
 func _ready() -> void:
@@ -127,7 +132,7 @@ func _test_action_boundaries(original: RefCounted, template: Dictionary, action:
 
 
 func _test_boss_boundaries(definition: Dictionary, identity: Dictionary, historical: bool = false) -> void:
-	var runtime := Boss.new()
+	var runtime := CountingBoss.new()
 	suite.assert_true(runtime.configure(definition, identity).ok, "complete Boss boundary fixture configures actual authority")
 	if historical:
 		if definition.id == "void_throne":
@@ -149,6 +154,9 @@ func _test_boss_boundaries(definition: Dictionary, identity: Dictionary, histori
 			continue
 		var snapshot: Dictionary = runtime.snapshot()
 		suite.assert_true(runtime.can_restore_native_snapshot(snapshot), "complete Boss template result retains strict auxiliary and receipt checks at every action boundary")
+		runtime.action_validation_calls = 0
+		suite.assert_true(runtime.call("_can_restore_snapshot_uncached", snapshot), "each full accepted boundary independently validates its Action authority")
+		suite.assert_equal(runtime.action_validation_calls, 1, "complete Boss validation checks the selected Action template once")
 		var fresh := Boss.new()
 		suite.assert_true(fresh.configure(definition, identity).ok and fresh.restore_snapshot(snapshot), "independent complete Boss restores current or historical warning, active, recovery and ended state")
 		suite.assert_equal(var_to_bytes(fresh.snapshot()), var_to_bytes(snapshot), "complete typed Boss and auxiliary state survives current or historical action boundary restoration")
