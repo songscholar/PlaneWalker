@@ -3,51 +3,59 @@
 [ext_resource type="Script" path="res://scripts/ui/views/combat_hud_view.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StylePanel"]
-bg_color = Color(0.035, 0.055, 0.078, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.18, 0.55, 0.67, 0.85)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
-
-[sub_resource type="StyleBoxFlat" id="StyleDangerPanel"]
-bg_color = Color(0.075, 0.035, 0.04, 0.94)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.9, 0.22, 0.12, 0.9)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
-
-[sub_resource type="StyleBoxFlat" id="StyleBarBackground"]
-bg_color = Color(0.015, 0.025, 0.04, 0.95)
+bg_color = Color(0.067, 0.086, 0.098, 0.92)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.16, 0.2, 0.25, 1)
+border_color = Color(0.412, 0.467, 0.443, 0.85)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 8.0
+content_margin_top = 5.0
+content_margin_right = 8.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxFlat" id="StyleDangerPanel"]
+bg_color = Color(0.14, 0.07, 0.067, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 2
+border_color = Color(0.941, 0.439, 0.396, 0.9)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 9.0
+content_margin_top = 5.0
+content_margin_right = 9.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBarBackground"]
+bg_color = Color(0.067, 0.086, 0.098, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.412, 0.467, 0.443, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleHPFill"]
-bg_color = Color(0.72, 0.14, 0.1, 1)
+bg_color = Color(0.941, 0.439, 0.396, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleEnergyFill"]
-bg_color = Color(0.08, 0.72, 0.9, 1)
+bg_color = Color(0.38, 0.835, 0.906, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleWeaponFill"]
-bg_color = Color(0.9, 0.58, 0.16, 1)
+bg_color = Color(0.875, 0.608, 0.396, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleCharacterFill"]
-bg_color = Color(0.46, 0.38, 0.92, 1)
+bg_color = Color(0.475, 0.729, 0.631, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBossFill"]
-bg_color = Color(0.9, 0.24, 0.11, 1)
+bg_color = Color(0.941, 0.439, 0.396, 1)
 
 [node name="CombatHudV2" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -68,18 +76,18 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="HudLayout" type="Control" parent="HudRoot/SafeArea"]
 layout_mode = 2
 
 [node name="RoomPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
 layout_mode = 0
-offset_right = 160.0
-offset_bottom = 54.0
+offset_right = 96.0
+offset_bottom = 48.0
 theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="RoomContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/RoomPanel"]
@@ -88,13 +96,15 @@ theme_override_constants/separation = 2
 
 [node name="RoomLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent"]
 layout_mode = 2
+theme_type_variation = &"CounterLabel"
 theme_override_colors/font_color = Color(0.72, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 14
 text = "1 / 5"
 horizontal_alignment = 1
 
 [node name="RunTimeLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent"]
 layout_mode = 2
+theme_type_variation = &"CounterLabel"
 theme_override_colors/font_color = Color(0.45, 0.72, 0.8, 1)
 text = "01:00"
 horizontal_alignment = 1
@@ -118,23 +128,23 @@ visible = false
 layout_mode = 0
 anchor_left = 0.3
 anchor_right = 0.7
-offset_top = 4.0
-offset_bottom = 82.0
+offset_top = 0.0
+offset_bottom = 64.0
 theme_override_styles/panel = SubResource("StyleDangerPanel")
 
 [node name="BossContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/BossPanel"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 2
 
 [node name="BossNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.75, 0.5, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
 [node name="BossHPBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
-custom_minimum_size = Vector2(0, 16)
+custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 max_value = 100.0
 value = 75.0
@@ -152,8 +162,8 @@ horizontal_alignment = 1
 layout_mode = 0
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -176.0
-offset_bottom = 92.0
+offset_left = -154.0
+offset_bottom = 80.0
 grow_horizontal = 0
 theme_override_styles/panel = SubResource("StylePanel")
 
@@ -164,12 +174,12 @@ theme_override_constants/separation = 2
 [node name="WeaponNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.46, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
 [node name="WeaponMeterBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
-custom_minimum_size = Vector2(152, 10)
+custom_minimum_size = Vector2(138, 8)
 layout_mode = 2
 max_value = 6.0
 value = 4.0
@@ -180,14 +190,14 @@ theme_override_styles/fill = SubResource("StyleWeaponFill")
 [node name="WeaponMeterLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.9, 0.76, 0.48, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
 [node name="WeaponStatusLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
@@ -196,9 +206,9 @@ visible = false
 layout_mode = 0
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -176.0
-offset_top = 96.0
-offset_bottom = 212.0
+offset_left = -154.0
+offset_top = 84.0
+offset_bottom = 180.0
 grow_horizontal = 0
 theme_override_styles/panel = SubResource("StylePanel")
 
@@ -209,12 +219,12 @@ theme_override_constants/separation = 2
 [node name="CharacterNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.82, 0.76, 1, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
 [node name="CharacterMeterBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent"]
-custom_minimum_size = Vector2(152, 10)
+custom_minimum_size = Vector2(138, 8)
 layout_mode = 2
 max_value = 3.0
 value = 2.0
@@ -225,21 +235,21 @@ theme_override_styles/fill = SubResource("StyleCharacterFill")
 [node name="CharacterMeterLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.72, 1, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
 [node name="CharacterStatusLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
 [node name="CharacterCooldownLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.68, 0.76, 0.9, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
@@ -248,27 +258,27 @@ visible = false
 layout_mode = 0
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -220.0
-offset_right = 300.0
-offset_bottom = -160.0
+offset_top = -164.0
+offset_right = 240.0
+offset_bottom = -112.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="ActiveItemContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 2
 
 [node name="ActiveItemNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
 [node name="ActiveItemStatusLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = ""
 horizontal_alignment = 1
 
@@ -276,15 +286,15 @@ horizontal_alignment = 1
 layout_mode = 0
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -154.0
-offset_right = 300.0
+offset_top = -108.0
+offset_right = 240.0
 offset_bottom = 0.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="PlayerContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/PlayerPanel"]
 layout_mode = 2
-theme_override_constants/separation = 5
+theme_override_constants/separation = 3
 
 [node name="HPLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
 layout_mode = 2
@@ -292,7 +302,7 @@ theme_override_colors/font_color = Color(1, 0.72, 0.62, 1)
 text = "HP"
 
 [node name="HPBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
-custom_minimum_size = Vector2(276, 18)
+custom_minimum_size = Vector2(224, 12)
 layout_mode = 2
 max_value = 200.0
 value = 160.0
@@ -306,7 +316,7 @@ theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
 text = ""
 
 [node name="EnergyBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
-custom_minimum_size = Vector2(276, 14)
+custom_minimum_size = Vector2(224, 10)
 layout_mode = 2
 max_value = 100.0
 value = 72.0
@@ -332,8 +342,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -250.0
-offset_top = -98.0
+offset_left = -212.0
+offset_top = -68.0
 offset_right = 0.0
 offset_bottom = 0.0
 grow_horizontal = 0
@@ -342,18 +352,18 @@ theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="SkillContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/SkillPanel"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 4
 
 [node name="AbilitySlot1Label" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
 [node name="AbilitySlot2Label" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.72, 1, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1

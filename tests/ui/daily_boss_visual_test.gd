@@ -1,6 +1,7 @@
 extends "res://tests/integration/ui/main_daily_boss_test.gd"
 
 const RESOLUTIONS := [Vector2i(640, 360), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(3440, 1440)]
+const ProductionTheme := preload("res://assets/production/ui/plane_walker_theme.tres")
 
 
 func _run() -> void:
@@ -20,10 +21,18 @@ func _run() -> void:
 				add_child(viewport)
 				var main := Main.instantiate()
 				viewport.add_child(main)
+				_suite.assert_equal(main.get_node("StartMenu/Panel").theme, ProductionTheme, "Main menu binds the production Theme")
+				_suite.assert_equal(main.get_node("PauseMenu/Panel").theme, ProductionTheme, "pause menu binds the production Theme")
+				_suite.assert_equal(main.get_node("RunEndOverlay/Panel").theme, ProductionTheme, "results menu binds the production Theme")
+				_suite.assert_equal(main.get_node("RunRuntimeHost/HudLayer/HudRoot").theme, ProductionTheme, "combat HUD binds the production Theme")
 				var hub: Node = main.get_node("HubFlowCoordinator")
+				_suite.assert_equal(hub.panel_view().theme, ProductionTheme, "Hub panels bind the production Theme")
 				_suite.assert_true(hub.travel("hub_council").ok and hub.open_function("gateway").ok, "actual daily gateway opens across supported visual combinations")
 				_daily_action(hub.panel_view(), "daily_boss").pressed.emit()
 				var coordinator: Node = main.get_node("DailyBossCoordinator")
+				_suite.assert_equal(coordinator.panel().theme, ProductionTheme, "daily panel binds the production Theme")
+				_suite.assert_true(coordinator.panel().panel_root.get_theme_stylebox("panel") is StyleBoxTexture, "daily shell consumes the production bitmap frame")
+				_suite.assert_true(coordinator.panel().summary_label.get_theme_font("font") == ProductionTheme.default_font, "daily body uses the committed font resource")
 				await _capture_daily(coordinator, viewport, "menu", locale, scale, screenshots)
 				var start := _daily_action(coordinator.panel(), "start")
 				_suite.assert_true(start.has_focus() and not start.disabled, "actual daily Start is focused and unlocked for earned Profile")
@@ -39,9 +48,22 @@ func _run() -> void:
 				var frozen: Dictionary = flow.snapshot()
 				await _capture_daily(coordinator, viewport, "pause", locale, scale, screenshots)
 				_suite.assert_equal(flow.snapshot(), frozen, "visual daily pause preserves authoritative frame count")
-				_daily_action(coordinator.panel(), "resume").pressed.emit()
+				var resume := _daily_action(coordinator.panel(), "resume")
+				_suite.assert_true(resume != null, "daily visual pause exposes a Resume action")
+				if resume != null:
+					resume.pressed.emit()
 				await _frames(3)
-				flow.current_boss().health.lose_health(100000, flow.current_player())
+				# The native arena publishes its boss reference on the first committed
+				# physics frame. Wait for that publication before driving the terminal
+				# visual state, otherwise large viewport imports can race it.
+				for _frame: int in range(30):
+					if flow.current_boss() != null:
+						break
+					await get_tree().physics_frame
+				var boss: Node2D = flow.current_boss()
+				_suite.assert_true(boss != null, "daily visual arena publishes its Boss before terminal capture")
+				if boss != null:
+					boss.health.lose_health(100000, flow.current_player())
 				await get_tree().process_frame
 				await get_tree().process_frame
 				_suite.assert_true(flow.preview().best.status == "VICTORY" and coordinator.panel().visible, "actual daily Boss terminal renders independent result")

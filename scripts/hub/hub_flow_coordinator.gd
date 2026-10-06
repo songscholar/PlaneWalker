@@ -17,6 +17,7 @@ const Facade := preload("res://scripts/hub/hub_runtime_facade.gd")
 const SceneHost := preload("res://scripts/hub/hub_scene_host.gd")
 const PanelViewScript := preload("res://scripts/ui/hub_panel_view.gd")
 const Result := preload("res://scripts/application/command_result.gd")
+const PLANE_WALKER_THEME_PATH := "res://assets/production/ui/plane_walker_theme.tres"
 
 var _facade: RefCounted
 var _registry: RefCounted
@@ -52,6 +53,7 @@ func _ready() -> void:
 	_build_toolbar()
 	_panel = PanelViewScript.new()
 	_panel.name = "HubPanelView"
+	_panel.theme = load(PLANE_WALKER_THEME_PATH) as Theme
 	_layer.add_child(_panel)
 	_panel.command_requested.connect(submit_command)
 	_panel.close_requested.connect(func(_revision: int): close_panel())
@@ -211,20 +213,29 @@ func _on_scene_function(id: String, epoch: int) -> void:
 
 func _build_toolbar() -> void:
 	_toolbar = Control.new()
+	_toolbar.theme = load(PLANE_WALKER_THEME_PATH) as Theme
 	_toolbar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_toolbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_layer.add_child(_toolbar)
+	var header_panel := PanelContainer.new()
+	header_panel.name = "HubHeader"
+	header_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	header_panel.offset_left = 12
+	header_panel.offset_right = -12
+	header_panel.offset_top = 6
+	header_panel.offset_bottom = 74
+	_toolbar.add_child(header_panel)
 	var header := VBoxContainer.new()
 	header.name = "Header"
-	_toolbar.add_child(header)
-	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_left = 12
-	header.offset_right = -12
-	header.offset_top = 6
+	header_panel.add_child(header)
+	header.add_theme_constant_override("separation", 2)
 	var top := HBoxContainer.new()
 	header.add_child(top)
 	_title = Label.new()
-	_title.add_theme_font_size_override("font_size", 14)
+	_title.theme_type_variation = &"DisplayLabel"
+	_title.add_theme_font_size_override("font_size", 17)
+	_title.add_theme_color_override("font_color", Color("edf0dc"))
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(_title)
 	_district = OptionButton.new()
@@ -235,16 +246,29 @@ func _build_toolbar() -> void:
 	_settings = MenuButton.new()
 	_settings.text = "..."
 	_settings.tooltip_text = tr("UI_ACCESSIBILITY_SETTINGS")
-	_settings.custom_minimum_size = Vector2(28, 26)
+	_settings.custom_minimum_size = Vector2(34, 26)
 	top.add_child(_settings)
 	_settings.get_popup().id_pressed.connect(_settings_selected)
 	_currency = Label.new()
 	_currency.add_theme_font_size_override("font_size", 11)
+	_currency.add_theme_color_override("font_color", Color("e5bd69"))
 	header.add_child(_currency)
 	_status = Label.new()
 	_status.add_theme_font_size_override("font_size", 11)
+	_status.add_theme_color_override("font_color", Color("df9b65"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header.add_child(_status)
+	var rule := ColorRect.new()
+	rule.name = "TimelineRule"
+	rule.color = Color("61d5e7")
+	rule.custom_minimum_size = Vector2(0, 1)
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toolbar.add_child(rule)
+	rule.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	rule.offset_left = 12
+	rule.offset_right = -12
+	rule.offset_top = 78
+	rule.offset_bottom = 79
 	_functions = HBoxContainer.new()
 	_functions.name = "Destinations"
 	_functions.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -253,8 +277,10 @@ func _build_toolbar() -> void:
 	_functions.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_functions.offset_left = 12
 	_functions.offset_right = -12
-	_functions.offset_top = -34
+	# Reserve a taller footer track so 1.5x text remains inside the viewport.
+	_functions.offset_top = -56
 	_functions.offset_bottom = -6
+	_functions.add_theme_constant_override("separation", 6)
 
 
 func _refresh_toolbar() -> void:
@@ -284,6 +310,7 @@ func _refresh_toolbar() -> void:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		button.add_theme_font_size_override("font_size", 11)
+		button.add_theme_color_override("font_color", Color("edf0dc"))
 		button.disabled = not row.available
 		button.pressed.connect(_toolbar_function.bind(str(row.id), _ui_epoch))
 		_functions.add_child(button)

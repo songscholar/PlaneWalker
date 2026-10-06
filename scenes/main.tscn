@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
@@ -13,6 +13,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/launch_loadout_panel.tscn" id="11_launch_panel"]
 [ext_resource type="Script" path="res://scripts/dungeon/room_scene_host.gd" id="12_room_scene_host"]
 [ext_resource type="Script" path="res://scripts/application/dungeon_flow_coordinator.gd" id="13_dungeon_flow"]
+[ext_resource type="Theme" path="res://assets/production/ui/plane_walker_theme.tres" id="14_theme"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -89,6 +90,23 @@ layer = 36
 [node name="StartMenu" type="CanvasLayer" parent="."]
 layer = 30
 
+[node name="Backdrop" type="ColorRect" parent="StartMenu"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.067, 0.086, 0.098, 0.94)
+
+[node name="TopRule" type="ColorRect" parent="StartMenu"]
+offset_left = 34.0
+offset_top = 24.0
+offset_right = 606.0
+offset_bottom = 25.0
+mouse_filter = 2
+color = Color(0.38, 0.835, 0.906, 0.9)
+
 [node name="Panel" type="PanelContainer" parent="StartMenu"]
 anchors_preset = 8
 anchor_left = 0.5
@@ -101,6 +119,7 @@ offset_right = 230.0
 offset_bottom = 164.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("14_theme")
 
 [node name="Margin" type="MarginContainer" parent="StartMenu/Panel"]
 offset_right = 460.0
@@ -119,16 +138,22 @@ theme_override_constants/separation = 6
 
 [node name="Title" type="Label" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
+theme_type_variation = &"DisplayLabel"
+theme_override_colors/font_color = Color(0.929, 0.941, 0.863, 1)
+theme_override_font_sizes/font_size = 24
 text = "Plane Walker"
 horizontal_alignment = 1
 
 [node name="Subtitle" type="Label" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.671, 0.722, 0.675, 1)
+theme_override_font_sizes/font_size = 12
 text = "MVP Vertical Slice"
 horizontal_alignment = 1
 
 [node name="LastRunLabel" type="Label" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.898, 0.741, 0.412, 1)
 text = "No runs recorded"
 horizontal_alignment = 1
 
@@ -136,18 +161,21 @@ horizontal_alignment = 1
 layout_mode = 2
 custom_minimum_size = Vector2(360, 44)
 focus_mode = 2
+theme_override_font_sizes/font_size = 10
 text = "Quick Start"
 
 [node name="CandidateButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(360, 38)
+custom_minimum_size = Vector2(360, 36)
 focus_mode = 2
+theme_override_font_sizes/font_size = 10
 text = "Candidate Lab"
 
 [node name="LaunchButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(360, 38)
+custom_minimum_size = Vector2(360, 36)
 focus_mode = 2
+theme_override_font_sizes/font_size = 10
 text = "Launch Loadout"
 
 [node name="RunEndOverlay" type="CanvasLayer" parent="."]
@@ -166,6 +194,7 @@ offset_right = 250.0
 offset_bottom = 164.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("14_theme")
 
 [node name="Margin" type="MarginContainer" parent="RunEndOverlay/Panel"]
 offset_right = 500.0
@@ -208,6 +237,7 @@ offset_right = 180.0
 offset_bottom = 130.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("14_theme")
 
 [node name="Margin" type="MarginContainer" parent="PauseMenu/Panel"]
 offset_right = 360.0

@@ -11,9 +11,11 @@ const FONT_SIZE_KEYS: Array[StringName] = [
 ]
 const FONT_META_PREFIX := "accessibility_base_font_"
 const IGNORE_TEXT_SCALE_META := &"accessibility_ignore_text_scale"
+const PRESENTATION_THEME_PATH := "res://assets/production/ui/plane_walker_theme.tres"
 
 var _settings: Dictionary = {}
 var _roots: Array[WeakRef] = []
+var _presentation_theme: Theme
 
 
 func _ready() -> void:
@@ -106,6 +108,7 @@ func _reapply_roots() -> void:
 
 func _apply_node(node: Node) -> void:
 	if node is Control:
+		_apply_presentation_theme(node as Control)
 		_apply_control_text_scale(node as Control)
 	if node.has_method("apply_accessibility_settings"):
 		node.call("apply_accessibility_settings", _settings.duplicate(true))
@@ -119,6 +122,21 @@ func _apply_node(node: Node) -> void:
 		)
 	for child: Node in node.get_children():
 		_apply_node(child)
+
+
+func _apply_presentation_theme(control: Control) -> void:
+	if control.theme != null:
+		return
+	var ancestor := control.get_parent()
+	while ancestor != null:
+		if ancestor is Control and ancestor.theme != null:
+			return
+		ancestor = ancestor.get_parent()
+	# Runtime loading leaves newly vendored assets free to import before use.
+	if _presentation_theme == null:
+		_presentation_theme = load(PRESENTATION_THEME_PATH) as Theme
+	control.theme = _presentation_theme
+	control.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
 func _apply_control_text_scale(control: Control) -> void:

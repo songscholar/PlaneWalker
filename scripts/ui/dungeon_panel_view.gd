@@ -5,6 +5,7 @@ signal close_requested(revision: int)
 signal closed
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const PLANE_WALKER_THEME_PATH := "res://assets/production/ui/plane_walker_theme.tres"
 
 var panel_root: PanelContainer
 var title_label: Label
@@ -23,6 +24,8 @@ var _error_key := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	theme = load(PLANE_WALKER_THEME_PATH) as Theme
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_layout()
 	visible = false
@@ -125,11 +128,7 @@ func _build_layout() -> void:
 	panel_root = PanelContainer.new()
 	panel_root.name = "PanelRoot"
 	safe_area.add_child(panel_root)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("101c23")
-	style.border_color = Color("8ceaff")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(2)
+	var style := panel_root.get_theme_stylebox("panel").duplicate() as StyleBox
 	style.content_margin_left = 12
 	style.content_margin_right = 12
 	style.content_margin_top = 8
@@ -139,26 +138,32 @@ func _build_layout() -> void:
 	layout.add_theme_constant_override("separation", 5)
 	panel_root.add_child(layout)
 	title_label = _label("", "TitleLabel", 16)
+	title_label.theme_type_variation = &"DisplayLabel"
+	title_label.add_theme_color_override("font_color", Color("edf0dc"))
 	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	layout.add_child(title_label)
 	summary_label = _label("", "SummaryLabel", 11)
-	summary_label.add_theme_color_override("font_color", Color("accbd1"))
+	summary_label.add_theme_color_override("font_color", Color("abb8ac"))
 	layout.add_child(summary_label)
 	error_label = _label("", "ErrorLabel", 11)
-	error_label.add_theme_color_override("font_color", Color("ffd18c"))
+	error_label.add_theme_color_override("font_color", Color("df9b65"))
 	error_label.max_lines_visible = 2
 	layout.add_child(error_label)
 	scroll = ScrollContainer.new()
 	scroll.name = "Scroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Keep the shell inside the safe area when enlarged text makes the row content tall.
+	scroll.custom_minimum_size = Vector2.ZERO
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
 	layout.add_child(scroll)
 	rows_container = VBoxContainer.new()
 	rows_container.name = "Rows"
 	rows_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rows_container.add_theme_constant_override("separation", 8)
+	rows_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rows_container.custom_minimum_size = Vector2(0, 0)
+	rows_container.add_theme_constant_override("separation", 6)
 	scroll.add_child(rows_container)
 	footer = HBoxContainer.new()
 	footer.name = "Footer"

@@ -6,6 +6,7 @@ signal intent_emitted(intent: Dictionary)
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
+const PRESENTATION_THEME_PATH := "res://assets/production/ui/plane_walker_theme.tres"
 
 @onready var hud_root: Control = $HudRoot
 @onready var room_label: Label = $HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent/RoomLabel
@@ -46,6 +47,15 @@ var _last_state: Dictionary = {}
 
 
 func _ready() -> void:
+	hud_root.theme = load(PRESENTATION_THEME_PATH) as Theme
+	hud_root.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var frame := hud_root.get_theme_stylebox("panel", "PanelContainer").duplicate() as StyleBox
+	frame.content_margin_left = 8
+	frame.content_margin_right = 8
+	frame.content_margin_top = 5
+	frame.content_margin_bottom = 5
+	for panel_name: String in ["RoomPanel", "WeaponPanel", "CharacterPanel", "ActiveItemPanel", "PlayerPanel", "SkillPanel"]:
+		(hud_root.get_node("SafeArea/HudLayout/" + panel_name) as PanelContainer).add_theme_stylebox_override("panel", frame)
 	low_hp_indicator.visible = false
 	boss_panel.visible = false
 	pause_indicator.visible = false

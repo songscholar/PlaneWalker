@@ -5,7 +5,7 @@ signal action_requested(id: String)
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Rewards := preload("res://scripts/modes/daily_reward_state.gd")
 var _countdown: Label
-var _commands: VBoxContainer
+var _commands: GridContainer
 
 
 func render(state: Dictionary):
@@ -17,9 +17,16 @@ func render(state: Dictionary):
 
 func _build_layout() -> void:
 	super._build_layout()
-	_commands = VBoxContainer.new()
+	# Keep commands visible above the scrolling calendar at enlarged text sizes.
+	var safe_area := get_node_or_null("SafeArea") as MarginContainer
+	if safe_area != null:
+		safe_area.add_theme_constant_override("margin_top", 12)
+		safe_area.add_theme_constant_override("margin_bottom", 12)
+	_commands = GridContainer.new()
 	_commands.name = "DailyCommands"
-	_commands.add_theme_constant_override("separation", 3)
+	_commands.columns = 2
+	_commands.add_theme_constant_override("h_separation", 6)
+	_commands.add_theme_constant_override("v_separation", 4)
 	var layout := scroll.get_parent()
 	layout.add_child(_commands)
 	layout.move_child(_commands, scroll.get_index())
@@ -28,6 +35,7 @@ func _build_layout() -> void:
 func _add_action(identifier: String, text: String, description: String, available: bool, disabled_reason_key: String, callback: Callable) -> Button:
 	var button := super._add_action(identifier, text, description, available, disabled_reason_key, callback)
 	button.get_parent().reparent(_commands, false)
+	(button.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return button
 
 

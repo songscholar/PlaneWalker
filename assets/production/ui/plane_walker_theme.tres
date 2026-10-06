@@ -1,0 +1,220 @@
+[gd_resource type="Theme" load_steps=25 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/production/ui/final_ui_frames/chrome_panel.png" id="1_panel"]
+[ext_resource type="Texture2D" path="res://assets/production/ui/final_ui_frames/chrome_button.png" id="2_button"]
+[ext_resource type="Texture2D" path="res://assets/production/ui/final_ui_frames/chrome_focus.png" id="3_focus"]
+[ext_resource type="FontFile" path="res://assets/production/fonts/NotoSansSC-Regular.ttf" id="4_body"]
+[ext_resource type="FontFile" path="res://assets/production/fonts/PixelifySans-Regular.ttf" id="5_display"]
+
+[sub_resource type="AtlasTexture" id="PanelAtlas"]
+atlas = ExtResource("1_panel")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="ButtonNormalAtlas"]
+atlas = ExtResource("2_button")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="ButtonHoverAtlas"]
+atlas = ExtResource("2_button")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="ButtonPressedAtlas"]
+atlas = ExtResource("2_button")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="ButtonDisabledAtlas"]
+atlas = ExtResource("2_button")
+region = Rect2(96, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="FocusAtlas"]
+atlas = ExtResource("3_focus")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="FontVariation" id="DisplayFont"]
+base_font = ExtResource("5_display")
+fallbacks = Array[Font]([ExtResource("4_body")])
+
+[sub_resource type="StyleBoxTexture" id="Panel"]
+texture = SubResource("PanelAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="PanelElevated"]
+bg_color = Color(0.141, 0.176, 0.176, 0.985)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 2
+border_color = Color(0.475, 0.729, 0.631, 0.9)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxTexture" id="ButtonNormal"]
+texture = SubResource("ButtonNormalAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+
+[sub_resource type="StyleBoxTexture" id="ButtonHover"]
+texture = SubResource("ButtonHoverAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+
+[sub_resource type="StyleBoxTexture" id="ButtonPressed"]
+texture = SubResource("ButtonPressedAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+
+[sub_resource type="StyleBoxTexture" id="ButtonFocus"]
+texture = SubResource("FocusAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 11.0
+content_margin_top = 6.0
+content_margin_right = 11.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxTexture" id="ButtonDisabled"]
+texture = SubResource("ButtonDisabledAtlas")
+texture_margin_left = 4.0
+texture_margin_top = 4.0
+texture_margin_right = 4.0
+texture_margin_bottom = 4.0
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+
+[sub_resource type="StyleBoxFlat" id="InputNormal"]
+bg_color = Color(0.067, 0.086, 0.098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.412, 0.467, 0.443, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 9.0
+content_margin_top = 6.0
+content_margin_right = 9.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="InputFocus"]
+bg_color = Color(0.141, 0.176, 0.176, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.38, 0.835, 0.906, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 8.0
+content_margin_top = 5.0
+content_margin_right = 8.0
+content_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxFlat" id="ProgressBackground"]
+bg_color = Color(0.067, 0.086, 0.098, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.412, 0.467, 0.443, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="ProgressFill"]
+bg_color = Color(0.38, 0.835, 0.906, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="FocusBorder"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.898, 0.741, 0.412, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[resource]
+default_font = ExtResource("4_body")
+default_font_size = 12
+DisplayLabel/base_type = &"Label"
+DisplayLabel/fonts/font = SubResource("DisplayFont")
+CounterLabel/base_type = &"Label"
+CounterLabel/fonts/font = SubResource("DisplayFont")
+Button/colors/font_color = Color(0.929, 0.941, 0.863, 1)
+Button/colors/font_hover_color = Color(1, 1, 0.94, 1)
+Button/colors/font_pressed_color = Color(0.898, 0.741, 0.412, 1)
+Button/colors/font_focus_color = Color(0.929, 0.941, 0.863, 1)
+Button/colors/font_disabled_color = Color(0.55, 0.63, 0.573, 1)
+Button/font_sizes/font_size = 12
+Button/styles/normal = SubResource("ButtonNormal")
+Button/styles/hover = SubResource("ButtonHover")
+Button/styles/pressed = SubResource("ButtonPressed")
+Button/styles/focus = SubResource("ButtonFocus")
+Button/styles/disabled = SubResource("ButtonDisabled")
+CheckBox/colors/font_color = Color(0.929, 0.941, 0.863, 1)
+CheckBox/colors/font_hover_color = Color(1, 1, 0.94, 1)
+CheckBox/font_sizes/font_size = 12
+LineEdit/colors/font_color = Color(0.929, 0.941, 0.863, 1)
+LineEdit/colors/font_placeholder_color = Color(0.671, 0.722, 0.675, 1)
+LineEdit/font_sizes/font_size = 12
+LineEdit/styles/normal = SubResource("InputNormal")
+LineEdit/styles/focus = SubResource("InputFocus")
+OptionButton/colors/font_color = Color(0.929, 0.941, 0.863, 1)
+OptionButton/colors/font_hover_color = Color(1, 1, 0.94, 1)
+OptionButton/font_sizes/font_size = 12
+OptionButton/styles/normal = SubResource("ButtonNormal")
+OptionButton/styles/hover = SubResource("ButtonHover")
+OptionButton/styles/pressed = SubResource("ButtonPressed")
+OptionButton/styles/focus = SubResource("ButtonFocus")
+Panel/colors/font_color = Color(0.929, 0.941, 0.863, 1)
+PanelContainer/styles/panel = SubResource("Panel")
+ProgressBar/styles/background = SubResource("ProgressBackground")
+ProgressBar/styles/fill = SubResource("ProgressFill")
+ScrollBar/styles/focus = SubResource("FocusBorder")
+Label/colors/font_color = Color(0.929, 0.941, 0.863, 1)
