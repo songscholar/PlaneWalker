@@ -97,5 +97,42 @@ its log is retained under `build/boss-native-validation-projection-red` and is
 excluded from RED evidence. Its uncommitted plan/test files were removed after
 Root redirected the scope. No production edits or performance claims resulted.
 
+## Native-Enabled Preparation
+
+Production integration is retained in `f29366f`; the combined clean source is
+`f85c84d94529f05986b29b586ac592b43c0a9dd1`. A separate diagnostic clone is
+`build/retained-checkout/native-enabled-hotpaths-f85c84d-20261006`.
+Its 412 unmodified runtime sources have aggregate
+`38750c6e8d84bd4d2bb584e151a53e398e86787670b3985fffa4e696fa0d7bb0`.
+The transformed runtime aggregate is
+`ec31c83044ba7fda83298dc9360540c515b376483f5f0ca1fec06f5a3bb82a58`.
+Both full source maps were independently matched to their physical files.
+This clone preserves the earlier 8011d1b preparation and historical baseline.
+
+The generator still retains 245 unique wrapped entries and exactly the two
+expected missing targets. Node syntax and diff checks pass. Its first import
+exits zero with 88 generated-translation diagnostics in each original log,
+all attributable to the same 11 valid configured CSV sources. Those original
+logs remain retained and are not described as strict clean. The second import
+and timer self-check each pass the strict paired validator. Two workers
+produce their exact nested caller edges, and all final stacks are empty.
+Independent review confirms these preparation results without rerunning combat.
+
+The production and instrumented manifest hashes are, respectively,
+`9971243977386496bc636f6d88175e1e15810e807560b6a5ce0839c067e66243`
+and `bb22b2414e0cfcffeaa479bf02e0a4bb7645fbca3a5a2585ed73a59d54ecb40e`.
+The timer self-check JSON has SHA-256
+`0a3de8978228ca86096bbedcbd95a33fd4adaf1d45e97f99f11826df5d9631cf`.
+After the separate editor/release 600-frame slots, the native-enabled
+120-frame diagnostic accepts all requested frames and observes 120 native
+preparations and zero public preparations. Its strict runtime logs, physical
+recording endpoints, source stability and PID/RSS binding pass. The retained
+report is in the clone's
+`build/floor4-phase2-native-enabled-diagnostic-120/report.json`, SHA-256
+`3455018600668fdc19bc055db168ec030c07b395b370c58f0d358f6870b5cdc8`.
+Mean frame work is 45.289 ms and mean wall time is 53.972 ms. Recorder safety,
+Boss configuration-context encoding and complete snapshots remain major
+exclusive costs. Instrumented attribution does not certify a frame budget.
+
 Frozen frame-budget, rendered/sustained performance, memory, saturation,
 complete UI and human playtesting remain separate program gates.
