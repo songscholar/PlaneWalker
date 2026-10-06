@@ -10,6 +10,7 @@ filter=""
 list_only=false
 timeout_seconds="${TEST_TIMEOUT_SECONDS:-${DEFAULT_TIMEOUT_SECONDS}}"
 current_pid=""
+effective_timeout_seconds="${timeout_seconds}"
 
 usage() {
 	cat <<'EOF'
@@ -122,6 +123,10 @@ run_with_timeout() {
 	if [[ "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" || "${scene}" == "tests/integration/ui/p14_controller_flow_test.tscn" || "${scene}" == "tests/integration/combat/launch_elite_mirroring_test.tscn" ]] && (( scene_timeout_seconds < 300 )); then
 		scene_timeout_seconds=300
 	fi
+	if [[ "${PLANEWALKER_COVERAGE_MANIFEST_SHA256:-}" =~ ^[0-9a-f]{64}$ && -n "${PLANEWALKER_COVERAGE_HITS_DIR:-}" ]] && [[ "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" ]] && (( scene_timeout_seconds < 900 )); then
+		scene_timeout_seconds=900
+	fi
+	effective_timeout_seconds="${scene_timeout_seconds}"
 
 	PLANEWALKER_TEST_DATA_DIR="${user_data_dir}/files" \
 	PLANEWALKER_COVERAGE_SCENE_ID="${scene//\//__}" \
@@ -199,7 +204,7 @@ for scene in "${test_scenes[@]}"; do
 
 	((failed += 1))
 	if (( status == 124 )); then
-		printf '[  TIMEOUT ] %s (%ss)\n' "${scene}" "${timeout_seconds}" >&2
+		printf '[  TIMEOUT ] %s (%ss)\n' "${scene}" "${effective_timeout_seconds}" >&2
 	elif (( status != 0 )); then
 		printf '[  FAILED  ] %s (exit %d)\n' "${scene}" "${status}" >&2
 	else

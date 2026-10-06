@@ -3,7 +3,7 @@
 - Status: Implemented / Focused verified
 - Document Role: Current test-fixture stability fixes discovered by instrumented runtime coverage
 - Authority Level: Below approved full-product completion contract
-- Applies To: Replay backpressure, reward smoke and Void candidate fallback fixtures
+- Applies To: Replay backpressure, reward smoke, Void candidate fallback and instrumented scene budgets
 - Owner: Project integration lead
 - Depends On: [Gameplay completion plan](../superpowers/plans/2026-10-06-gameplay-ui-product-completion.md)
 - Last Verified: 2026-10-06
@@ -93,3 +93,56 @@ requirements audit reports no known vulnerabilities in
 `build/void-burn-fallback-fixture-20261006/dependency-audit.json`; no dependencies
 change. This focused correction does not certify a complete scene
 suite, full line coverage, FPS, final source or human playtesting.
+
+## Instrumented Save Scene Budgets
+
+The frozen `d195fe7` complete ordinary preflight finishes 517/518 scene tests;
+its only failure is the unchanged Void fixture described above. In the original
+instrumented full preflight, three unchanged save scenes exceed 300 seconds:
+`local_run_records_test`, `native_combat_checkpoint_test`, and
+`native_content_migration_test`. Those original timeout logs remain under
+`build/retained-checkout/gameplay-certification-d195fe7-20261006/build/full-runtime-coverage-preflight/`.
+
+Separate 900-second diagnostics reuse that exact already-instrumented project
+and manifest without reinstrumenting or changing the test source. The complete
+1000-entry board and 1000-source authenticated outbox boundaries pass 1/1 in
+`build/local-records-instrumented-timeout-rerun-20261006/`; its physical report
+contains 6354 covered original lines. The complete 25-state combat checkpoint
+test passes 1/1 in `build/native-checkpoint-instrumented-timeout-rerun-20261006/`;
+its physical report contains 32088 covered original lines. Both diagnostics
+retain one actual process hit report, verify it against the 413-script original
+manifest (411 scripts have executable lines), and pass strict stdout/engine-log
+pair validation. The unchanged native content migration test also passes 1/1
+in `build/native-migration-instrumented-timeout-rerun-20261006/`; its single
+physical report contains 28197 covered original lines and passes the same
+manifest and strict paired-log checks.
+All diagnostic directories in this section are relative to the frozen
+checkout's `build/` directory, not the live project.
+
+`tools/run_tests.sh` gives only these three verified save tests a minimum
+900-second budget under instrumentation, requiring a syntactically valid
+manifest SHA-256 and a physical-hit directory. It preserves their existing
+ordinary 300-second minima and every test assertion. Timeout output now names
+the actual effective budget, including the existing scene-specific minima.
+
+The new `test_scene_runner_budget.py` contract runs the actual Bash runner with
+a small engine fixture and an accelerated shell watchdog clock. Its initial
+RED evidence is `build/scene-runner-budget-red-20261006.log`; after the change,
+`build/scene-runner-budget-green-20261006.log` passes 5/5. A separate migration
+RED is retained in `build/scene-runner-budget-migration-red-20261006.log` before
+adding the third verified scene. Final verification, including all three save
+budgets, passes the complete 16-test coverage contract suite in
+`build/scene-runner-budget-coverage-contracts-final-20261006.log`. The checks exercise
+ordinary timeouts, both instrumentation identity fields, unrelated scenes,
+explicit larger budgets, bounded termination of a hung process and rejection
+of script errors despite a zero process exit. Engine fixtures test the runner
+contract only and do not certify game execution or runtime coverage.
+The Bash syntax check and `git diff --check` pass. The pinned development,
+coverage and production-art requirements audit reports no known vulnerabilities
+in `build/scene-runner-budget-dependency-audit-20261006.json`; dependencies do
+not change.
+
+These focused GREEN diagnostics do not replace the original failed full-suite
+result. Final certification still requires the complete ordinary and
+instrumented suites, export/startup and remaining gates on the final committed
+revision in an independent Git checkout.

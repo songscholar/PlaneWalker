@@ -95,6 +95,15 @@ for focused development checks; a filtered result does not certify full-suite
 coverage. The tool checks source hashes against the original project after
 execution, so measure an immutable committed checkout during parallel work.
 
+The instrumented runner gives `local_run_records_test`,
+`native_combat_checkpoint_test`, and `native_content_migration_test` a minimum
+900-second scene budget when both the manifest SHA-256 and physical-hit directory
+are configured. Uninstrumented budgets remain unchanged. The complete boundary
+and restoration assertions still run, hangs remain bounded, and timeout messages
+show the effective scene budget.
+Increasing a diagnostic budget does not turn a previously failed full suite into
+a passing certificate; the complete suite must run again from a frozen source.
+
 To run both the uninstrumented suite and the complete instrumented suite through
 the validation/certification path, set an absolute provisioned interpreter:
 
