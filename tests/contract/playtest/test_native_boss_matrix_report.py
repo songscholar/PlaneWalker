@@ -7,6 +7,7 @@ import json
 from contextlib import redirect_stderr
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -109,6 +110,29 @@ class NativeBossMatrixReportTest(unittest.TestCase):
         source = matrix.source_identity(sources)
         errors = matrix.validate_committed_source({key: value for key, value in sources.items() if key != removed}, source["revision"])
         self.assertIn(f"native certification source is missing from the working tree: {removed}", errors)
+
+    def test_nested_frozen_checkout_validates_the_repository_full_tree(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            repository = Path(directory)
+            files = {"scripts/runtime.gd": "extends RefCounted\n", "project.godot": "config_version=5\n"}
+            for relative, payload in files.items():
+                path = repository / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(payload, encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True, capture_output=True)
+            subprocess.run(["git", "add", "--", *files], cwd=repository, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=Native Matrix Test", "-c", "user.email=native-matrix@example.invalid", "commit", "-qm", "source fixture"], cwd=repository, check=True, capture_output=True)
+            revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository, check=True, capture_output=True, text=True).stdout.strip()
+            frozen = repository / "build/retained-checkout/source"
+            for relative, payload in files.items():
+                path = frozen / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(payload, encoding="utf-8")
+            sources = {relative: hashlib.sha256((frozen / relative).read_bytes()).hexdigest() for relative in files}
+            with patch.object(matrix, "ROOT", frozen):
+                self.assertEqual(matrix.validate_committed_source(sources, revision), [])
+                (frozen / "scripts/runtime.gd").write_text("extends Node\n", encoding="utf-8")
+                self.assertIn("native certification source differs from commit: scripts/runtime.gd", matrix.validate_committed_source(sources, revision))
 
     def test_cli_refuses_dirty_source_before_launch_or_evidence_writes(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:

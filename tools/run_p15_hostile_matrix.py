@@ -83,7 +83,7 @@ def source_identity(sources: dict[str, str], revision_override: str | None = Non
 def validate_committed_source(sources: dict[str, str], revision: str) -> list[str]:
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         return ["native certification requires a resolved Git source commit"]
-    tree = subprocess.run(["git", "ls-tree", "-rz", revision], cwd=ROOT, capture_output=True, check=False)
+    tree = subprocess.run(["git", "ls-tree", "-rz", "--full-tree", revision], cwd=ROOT, capture_output=True, check=False)
     if tree.returncode:
         return ["native certification source commit is unavailable"]
     blobs = {}
