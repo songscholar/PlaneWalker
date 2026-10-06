@@ -569,6 +569,60 @@ class NativePerformanceProbeContract(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         probe.validate_report(retained)
 
+    def test_cli_timeout_preserves_original_exception_and_fails_closed_with_or_without_native_report(self):
+        probe = self.require_api()
+        for report_present in [False, True]:
+            with self.subTest(report_present=report_present), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                binary, resource = fixture_package(root)
+                output = root / "build/timeout/report.json"
+                native_report = framed_report(3)
+                timeout_errors = []
+
+                def run(command, **kwargs):
+                    if command[0] != str(binary):
+                        return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+                    if report_present:
+                        output.write_text(json.dumps(native_report), encoding="utf-8")
+                        fixture_pid_announcement(output, native_report, kwargs["stdout"])
+                    else:
+                        output.with_name("godot.log").write_text("Godot Engine fixture\n", encoding="utf-8")
+                    timeout_error = subprocess.TimeoutExpired(command, kwargs["timeout"], output=b"partial native stdout", stderr=b"partial native stderr")
+                    timeout_errors.append(timeout_error)
+                    raise timeout_error
+
+                argv = [str(SOURCE), "--output", str(output), "--timeout", "1", "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
+                with patch.object(probe, "ROOT", root), patch.object(probe.subprocess, "run", side_effect=run), patch.object(probe._ProcessRssSampler, "start") as sampler_start, patch.object(probe._ProcessRssSampler, "stop") as sampler_stop, patch.object(probe._ProcessRssSampler, "snapshot", return_value=rss_fixture()), patch.object(sys, "argv", argv), patch("builtins.print") as printed:
+                    with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                        probe.main()
+                    sampler_start.assert_called_once()
+                    sampler_stop.assert_called_once()
+                    printed.assert_not_called()
+                self.assertEqual(len(timeout_errors), 1)
+                self.assertIs(caught.exception, timeout_errors[0], "cleanup must preserve the original TimeoutExpired")
+                self.assertEqual(caught.exception.timeout, 1)
+                self.assertEqual(caught.exception.output, b"partial native stdout")
+                self.assertEqual(caught.exception.stderr, b"partial native stderr")
+                manifest = json.loads(output.with_name("source-manifest.json").read_text())
+                self.assertEqual(manifest["command"], caught.exception.cmd)
+                self.assertEqual(manifest["execution_status"], "failed")
+                self.assertIs(manifest["timed_out"], True)
+                self.assertIsNone(manifest["process_exit_code"])
+                self.assertTrue(manifest["runtime_logs_clean"])
+                if report_present:
+                    retained = json.loads(output.read_text())
+                    self.assertEqual(retained["native_status"], "pass")
+                    self.assertEqual(retained["status"], "failed")
+                    self.assertIs(retained["source"]["timed_out"], True)
+                    self.assertIsNone(retained["source"]["process_exit_code"])
+                    self.assertEqual(retained["accepted_frames"], native_report["accepted_frames"])
+                    with self.assertRaises(ValueError):
+                        probe.validate_report(retained)
+                else:
+                    self.assertFalse(output.exists(), "a timeout without a report cannot invent native samples")
+                    for field in ["accepted_frames", "metrics", "sample_frames", "recording"]:
+                        self.assertNotIn(field, manifest)
+
 
 if __name__ == "__main__":
     unittest.main()
