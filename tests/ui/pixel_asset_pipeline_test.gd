@@ -11,7 +11,9 @@ const REQUIRED := {
 	"player_projectiles": ["arrow", "bullet", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
 	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
 	"event_art": Events.EVENT_IDS,
-	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back"],
+	"npc_portraits": ["odysseus", "elara", "sibyl", "hermes", "phia", "morpheus", "nemesis", "vera"],
+	"ending_art": ["return_of_order", "embrace_of_void", "balance_of_ashes", "shattered_freedom", "echo_of_primordial"],
+	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
@@ -40,7 +42,7 @@ func _run() -> void:
 			suite.assert_true(image != null and not image.is_empty(), "%s/%s raster loads" % [batch_id, asset_id])
 			if image == null or image.is_empty():
 				continue
-			var expected_size := Vector2i(96, 64) if batch_id == "event_art" else Vector2i(32, 32)
+			var expected_size: Vector2i = {"event_art": Vector2i(96, 64), "npc_portraits": Vector2i(64, 64), "ending_art": Vector2i(128, 72)}.get(batch_id, Vector2i(32, 32))
 			suite.assert_equal(image.get_width(), expected_size.x * 4, "%s/%s has four authored frames" % [batch_id, asset_id])
 			suite.assert_equal(image.get_height(), expected_size.y, "%s/%s keeps the authored frame height" % [batch_id, asset_id])
 			var imported := load(path) as Texture2D

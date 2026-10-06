@@ -11,11 +11,14 @@ const REQUIRED_GENERATED := {
 	"player_projectiles": ["arrow", "bullet", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
 	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
 	"event_art": Events.EVENT_IDS,
-	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back"],
+	"npc_portraits": ["odysseus", "elara", "sibyl", "hermes", "phia", "morpheus", "nemesis", "vera"],
+	"ending_art": ["return_of_order", "embrace_of_void", "balance_of_ashes", "shattered_freedom", "echo_of_primordial"],
+	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
 const REQUIRED_CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
+const FRAME_SIZES := {"event_art": Vector2i(96, 64), "npc_portraits": Vector2i(64, 64), "ending_art": Vector2i(128, 72)}
 
 
 static func load_inventory() -> Dictionary:
@@ -70,7 +73,7 @@ static func validate() -> Dictionary:
 			var digest := FileAccess.get_sha256(path)
 			if digest != str(value.get("sha256", "")):
 				errors.append("asset hash mismatch: %s" % path)
-			var expected_size := Vector2i(96, 64) if batch_id == "event_art" else Vector2i(32, 32)
+			var expected_size: Vector2i = FRAME_SIZES.get(batch_id, Vector2i(32, 32))
 			if int(value.get("frame_width", 0)) != expected_size.x or int(value.get("frame_height", 0)) != expected_size.y or int(value.get("frame_count", 0)) != 4:
 				errors.append("asset frame dimensions or count mismatch: %s" % path)
 	for batch_id: String in REQUIRED_CONTENT_BATCHES:
