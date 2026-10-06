@@ -92,6 +92,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Mode And Product UI Finish](current/2026-10-06-mode-product-ui-finish-evidence.md) | Four native mode HUDs, rewards, replay, platform and content interfaces | Focused Verified / Arena framing and final certification pending |
 | [Native Mode Arena Framing](current/2026-10-06-native-mode-arena-framing-evidence.md) | Owned mode cameras, bitmap backdrops, Endless route refresh and true 3440x1440 capture targets | Focused Verified / Final integrated matrix pending |
 | [Gameplay Engineering Preflight](current/2026-10-06-gameplay-engineering-preflight-evidence.md) | Frozen-source ordinary, instrumented, five-floor and partial matrix evidence with failures retained | Engineering preflight / Final certification pending |
+| [Final Clean Certification](current/2026-10-06-final-clean-certification-evidence.md) | Separate 332/334 ordinary baseline, two focused repair reruns and clean committed macOS release/startup evidence | Focused Verified / Full same-source certification pending |
 | [Actor Commit Validation](current/2026-10-06-actor-commit-validation-evidence.md) | 原生提交验证调用收敛、生产物理状态保持与未达标性能实测 | Focused Verified / Sustained FPS gate failed |
 | [Void Checkpoint Projection](current/2026-10-06-void-checkpoint-projection-evidence.md) | 主线程只读历史缓存、线程私有恢复、原生 Save/Replay 回归与局部成本测量 | Focused Verified / Sustained FPS certification pending |
 | [Gameplay Then UI Completion Plan](superpowers/plans/2026-10-06-gameplay-ui-product-completion.md) | 先完成真实玩法认证，再完成整套 UI 和最终本地产品验收 | Active / Current |
