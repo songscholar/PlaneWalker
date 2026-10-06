@@ -207,6 +207,10 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 	if valid:
 		_cache_validated_snapshot(context, encoded, accepted_boundary)
 		if not checkpoint.is_empty():
+			if get_script() == VoidAuxiliaryRuntime and OS.get_thread_caller_id() == OS.get_main_thread_id():
+				var retained: Dictionary = bytes_to_var(checkpoint.replay)
+				_freeze_checkpoint_value(retained)
+				checkpoint["decoded"] = retained
 			_event_replay_checkpoint_mutex.lock()
 			_event_replay_checkpoint = checkpoint
 			_event_replay_checkpoint_mutex.unlock()
@@ -215,11 +219,31 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 
 func _event_checkpoint_replay(context: PackedByteArray, events: PackedByteArray, frame: int) -> Dictionary:
 	var replay_bytes := PackedByteArray()
+	var retained: Dictionary = {}
 	_event_replay_checkpoint_mutex.lock()
 	if not _event_replay_checkpoint.is_empty() and _event_replay_checkpoint.context == context and _event_replay_checkpoint.events == events and frame >= int(_event_replay_checkpoint.frame):
-		replay_bytes = _event_replay_checkpoint.replay
+		if get_script() == VoidAuxiliaryRuntime and OS.get_thread_caller_id() == OS.get_main_thread_id() and _event_replay_checkpoint.get("decoded") is Dictionary:
+			retained = _event_replay_checkpoint.decoded
+		else:
+			replay_bytes = _event_replay_checkpoint.replay
 	_event_replay_checkpoint_mutex.unlock()
+	# Read-only Dictionary traversal is not thread-safe in Godot 4.6.1.
+	# Main-thread expiry only replaces top-level arrays; workers decode private state.
+	if not retained.is_empty():
+		return retained.duplicate()
 	return bytes_to_var(replay_bytes) if not replay_bytes.is_empty() else {}
+
+
+static func _freeze_checkpoint_value(value: Variant) -> void:
+	if value is Dictionary:
+		for key: Variant in value:
+			_freeze_checkpoint_value(key)
+			_freeze_checkpoint_value(value[key])
+		value.make_read_only()
+	elif value is Array:
+		for child: Variant in value:
+			_freeze_checkpoint_value(child)
+		value.make_read_only()
 
 
 func _clear_event_replay_checkpoint() -> void:
