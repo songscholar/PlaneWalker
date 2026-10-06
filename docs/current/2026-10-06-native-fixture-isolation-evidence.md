@@ -5,6 +5,7 @@
 - Authority Level: Below approved full-product completion contract
 - Applies To: `native_launch_route_fixture.gd`, Main native resume and checkpoint scenes
 - Owner: Gameplay performance lane
+- Depends On: `docs/superpowers/plans/2026-10-06-gameplay-ui-product-completion.md`, `AGENTS.md`
 - Last Verified: 2026-10-06
 
 ## Failure Cause

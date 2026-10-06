@@ -128,6 +128,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Production Frame Integration Evidence](current/2026-10-06-native-production-frame-integration-evidence.md) | 正式 Main 新局与物理冷读档均采用原生候选，独立 RED/GREEN、十一项邻域及空缓存导入通过 | Implemented / Focused regressions verified |
 | [Native-Enabled Runtime Measurement Evidence](current/2026-10-06-native-enabled-runtime-measurement-evidence.md) | 冻结原生接入源码的 editor/release 600 帧、官方导入导出、物理 typed 端点及 PID/RSS 验证通过，整帧预算仍失败 | Recording And Monitoring Verified / Frame budget failed |
 | [Coverage Fixture Fixes Evidence](current/2026-10-06-coverage-fixture-fixes-evidence.md) | 插桩下回放后台写入等待和奖励烟雾生命周期夹具修复，普通/插桩专项通过 | Implemented / Focused verified |
+| [Native Fixture Isolation Evidence](current/2026-10-06-native-fixture-isolation-evidence.md) | Main 原生读档夹具的隔离用户目录、可选流程依赖和明确启动失败边界 | Focused Verified / Combined certification pending |
 | [Native Owned Hotpath Diagnostic Plan](current/2026-10-06-native-owned-hotpath-diagnostic-plan.md) | 冻结 Main 热点、真实 native/public 调用数与完整快照编码归因 | Approved / Current |
 | [Native Release Runtime Probe Plan](current/2026-10-06-native-release-probe-plan.md) | 官方发行运行时打包测量、真实内存可用性与执行身份 | Approved / Current |
 | [Native Release Runtime Probe Evidence](current/2026-10-06-native-release-probe-evidence.md) | 公开票据 fallback 基线的 600 帧录制与 PID/RSS 绑定通过；历史失败保留，帧预算未达标 | Recording And Monitoring Verified / Frame budget failed |
@@ -166,6 +167,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
 | [Native UI Finish Plan](superpowers/plans/2026-10-06-native-ui-finish.md) | HUD、据点与全部外围界面打磨方案已准备，等待玩法认证后实施 | Prepared / Not started |
 | [Native UI Preparation Audit](current/2026-10-06-native-ui-preparation-evidence.md) | 官方字体版本、哈希和授权读证，49 个界面的现有契约、焦点入口与并行责任边界 | Prepared / UI implementation not started |
+| [Pixel Asset Pipeline](superpowers/specs/2026-10-06-pixel-asset-pipeline-design.md) | 角色、敌人、Boss、武器、效果、房间与 UI 像素资源的确定性生产和验收规范 | Active / Asset batches in progress |
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
 | [Dungeon Probe Encounter Design](superpowers/specs/2026-10-05-dungeon-probe-native-encounter-design.md) | 合成模拟复用正式遭遇状态机、固定帧与生成及死亡回执 | Approved / Current authority |
 | [Dungeon Probe Encounter Plan](superpowers/plans/2026-10-05-dungeon-probe-native-encounter.md) | 守卫事件回归、工具适配器和三十种子报告修复 | Active / Current |
