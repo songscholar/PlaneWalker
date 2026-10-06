@@ -2,6 +2,7 @@ class_name StaffSpellZone
 extends Area2D
 
 const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+const ZoneArt := preload("res://scripts/presentation/player_zone_atlas_projection.gd")
 
 signal payload_result(action_token: int, generation: int, result: Dictionary)
 signal resource_reward_requested(
@@ -67,6 +68,7 @@ var _transient_status_target_ids: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group("staff_spell_zones")
+	ZoneArt.attach(self)
 	set_physics_process(_execution_active)
 
 
@@ -146,6 +148,7 @@ func configure_execution(execution: Dictionary) -> bool:
 	_duration_frames = int(timing["duration_frames"])
 	_tick_interval_frames = int(timing["tick_interval_frames"])
 	_execution_active = true
+	ZoneArt.attach(self)
 	set_physics_process(is_inside_tree())
 	return true
 

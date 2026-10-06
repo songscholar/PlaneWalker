@@ -2,6 +2,7 @@ class_name GauntletsZoneExecution
 extends Area2D
 
 const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+const ZoneArt := preload("res://scripts/presentation/player_zone_atlas_projection.gd")
 
 signal payload_result(action_token: int, generation: int, result: Dictionary)
 
@@ -47,6 +48,7 @@ var _collision_shape: CollisionShape2D
 func _ready() -> void:
 	add_to_group("gauntlets_payloads")
 	add_to_group("gauntlets_zones")
+	ZoneArt.attach(self)
 	set_physics_process(_execution_active)
 
 
@@ -113,6 +115,7 @@ func configure_execution(execution: Dictionary) -> bool:
 	_source_id = StringName("gauntlets_zone:%d:%d:%s" % [action_token, generation, descriptor_id])
 	_execution_active = true
 	_configure_collision()
+	ZoneArt.attach(self)
 	set_physics_process(is_inside_tree())
 	return true
 

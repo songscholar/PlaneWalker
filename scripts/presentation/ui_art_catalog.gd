@@ -11,17 +11,18 @@ const REQUIRED_GENERATED := {
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
 	"player_projectiles": ["arrow", "bullet", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
 	"held_weapons": ["sword", "bow", "gun", "gauntlets", "staff_arcane", "staff_fire", "staff_ice", "staff_lightning"],
+	"player_zones": ["ice_zone", "planar_collapse", "seeded_sequence", "steam_burst", "crystal_thunder", "reverse_steam", "thunder_flare", "thunder_crystal", "blazing_storm", "space_time_shatter", "primordial_collapse", "charged_heavy_shockwave", "rewind_counter_shockwave"],
 	"room_types": ["entry", "unknown", "combat", "elite", "treasure", "shop", "event", "boss", "rest"],
 	"event_art": Events.EVENT_IDS,
 	"npc_portraits": ["odysseus", "elara", "sibyl", "hermes", "phia", "morpheus", "nemesis", "vera"],
 	"ending_art": ["return_of_order", "embrace_of_void", "balance_of_ashes", "shattered_freedom", "echo_of_primordial"],
 	"challenge_rewards": ChallengeRewards.IDS,
-	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing"],
+	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing", "keyboard_mouse", "controller"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
 const REQUIRED_CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
-const FRAME_SIZES := {"event_art": Vector2i(96, 64), "npc_portraits": Vector2i(64, 64), "ending_art": Vector2i(128, 72)}
+const FRAME_SIZES := {"event_art": Vector2i(96, 64), "npc_portraits": Vector2i(64, 64), "ending_art": Vector2i(128, 72), "player_zones": Vector2i(64, 64)}
 
 
 static func load_inventory() -> Dictionary:

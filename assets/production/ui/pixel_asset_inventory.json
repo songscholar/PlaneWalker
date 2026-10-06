@@ -810,6 +810,169 @@
       ]
     },
     {
+      "id": "player_zones",
+      "status": "generated",
+      "scope": "native staff combinations and gauntlets spatial effect atlases",
+      "assets": [
+        {
+          "id": "ice_zone",
+          "path": "player_zones/ice_zone.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "0d0a0c20cbdf847af8fae2d9ac23cb731bc5ebb4876262ec62d6013e5dbae8fe"
+        },
+        {
+          "id": "planar_collapse",
+          "path": "player_zones/planar_collapse.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "baff40f732168e681a031e12eb9a3dc4610d9b89c883a008084f7533507e766f"
+        },
+        {
+          "id": "seeded_sequence",
+          "path": "player_zones/seeded_sequence.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "0363953d58f6d8fcc38e1798c4730191ab44790e29c8d33df27b8e722346ee49"
+        },
+        {
+          "id": "steam_burst",
+          "path": "player_zones/steam_burst.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "9ccc924614dc17d7ad2f48b0be1046c4fff976f05f32038c4dcfd23423d883bf"
+        },
+        {
+          "id": "crystal_thunder",
+          "path": "player_zones/crystal_thunder.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "508894f441492736b015178e8176cf6206ceb744d31d00d0c04d2470286113be"
+        },
+        {
+          "id": "reverse_steam",
+          "path": "player_zones/reverse_steam.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "bcd57521db8e03f7cbef25922b0e9af6083606e464f5d5f09798f2f8fd30bf3a"
+        },
+        {
+          "id": "thunder_flare",
+          "path": "player_zones/thunder_flare.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "1844e16c3088f3ae10a695111c45cea7e701516c24014219f473d73234eeada4"
+        },
+        {
+          "id": "thunder_crystal",
+          "path": "player_zones/thunder_crystal.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "65f38e5b5a66d5bf2a3c547b042a9fce788a1055f8e7fbcbb5d4fa6094dd1c96"
+        },
+        {
+          "id": "blazing_storm",
+          "path": "player_zones/blazing_storm.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "d6935cb1f19dd102ea5fbf17f31a38b470229cb42e489a0f1d749484ed100d28"
+        },
+        {
+          "id": "space_time_shatter",
+          "path": "player_zones/space_time_shatter.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "8fe381f455d8bbe1241d294fb2d0955313586272720de5a4c5ef742a20f400b3"
+        },
+        {
+          "id": "primordial_collapse",
+          "path": "player_zones/primordial_collapse.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "146e2af40d07bccd88d337949dc37f250d452f2f0c7b9502a736bfd450a663d8"
+        },
+        {
+          "id": "charged_heavy_shockwave",
+          "path": "player_zones/charged_heavy_shockwave.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "dfc6be4771b9dfdb6c0d0fd9bf926e6240b4c4434391441570ed7e52b38dcf73"
+        },
+        {
+          "id": "rewind_counter_shockwave",
+          "path": "player_zones/rewind_counter_shockwave.png",
+          "kind": "player_zones",
+          "width": 256,
+          "height": 64,
+          "frame_width": 64,
+          "frame_height": 64,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "dbb4be716b8bd2638a64e77b94200709969dc1484ea18ba5853ae01a186d8c46"
+        }
+      ]
+    },
+    {
       "id": "room_types",
       "status": "generated",
       "scope": "revealed room types and a distinct unknown glyph",
@@ -1724,6 +1887,30 @@
           "frame_count": 4,
           "filter": "nearest",
           "sha256": "d9f3bc07b788cb6f8c67b12109fe3748392870b3be7c9e1a971ca5e52d830df9"
+        },
+        {
+          "id": "keyboard_mouse",
+          "path": "controls/keyboard_mouse.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "93b52b76261f00d39aeecbad51a8ff81840fe9bbe71de3946f52cbb0d95b445f"
+        },
+        {
+          "id": "controller",
+          "path": "controls/controller.png",
+          "kind": "controls",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "bf38f38eb101036da01a2c6dd3390db07acc5c214ac83374b37b6a4e9865a572"
         }
       ]
     },

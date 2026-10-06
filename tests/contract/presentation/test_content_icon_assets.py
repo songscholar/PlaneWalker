@@ -60,7 +60,7 @@ class ContentIconAssetsTest(unittest.TestCase):
             with Image.open(ART / row["path"]) as image:
                 self.assertEqual(image.size, (384, 64))
         controls = next(row for row in inventory["batches"] if row["id"] == "controls")
-        self.assertEqual({row["id"] for row in controls["assets"]}, {"decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing"})
+        self.assertEqual({row["id"] for row in controls["assets"]}, {"decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing", "keyboard_mouse", "controller"})
 
     def test_player_projectiles_have_distinct_four_frame_pixel_sequences(self):
         inventory = json.loads((ART / "pixel_asset_inventory.json").read_text())

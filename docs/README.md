@@ -82,6 +82,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Content Icons And Player Effects](current/2026-10-06-content-vfx-art-integration-evidence.md) | 117 独立内容图标、18 事件画面、九房间符号与实际玩家特效接入/像素验收 | Focused Verified / Final UI and gameplay certification pending |
 | [Player Projectile Artwork](current/2026-10-06-player-projectile-art-evidence.md) | 弓箭、子弹和四元素法术的原生位图替换、物理/回放回归与实际房间渲染验证 | Focused Verified / Final build certification pending |
 | [Held Weapon Raster Artwork](current/2026-10-06-held-weapon-art-evidence.md) | Eight equipped weapon/element atlases, phase projection and real-room source pixel checks | Focused Verified / Final combined certification pending |
+| [Player Zone Raster Artwork](current/2026-10-06-player-zone-art-evidence.md) | Thirteen native Staff/Gauntlets spatial effect atlases, exact origins/radii, cold restoration and two device glyphs | Focused Verified / Final combined certification pending |
 | [Narrative Raster Artwork](current/2026-10-06-narrative-art-evidence.md) | Eight NPC portraits, five ending scenes and fourteen additional command symbols with source/import/render validation | Focused Verified / Runtime UI consumption pending |
 | [Challenge Reward Artwork](current/2026-10-06-challenge-reward-art-evidence.md) | Eleven independent reward atlases with authoritative identity and native pixel validation | Focused Verified / Runtime UI consumption pending |
 | [Player Raster Afterimages](current/2026-10-06-player-afterimage-art-evidence.md) | Frozen native character pixels, camera footprint and real-room alpha blend validation | Focused Verified / Final combined certification pending |
@@ -98,6 +99,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Semantic Frame Observation Evidence](current/2026-10-06-semantic-frame-observation-evidence.md) | 语义效果提交使用原生帧边界窄观察，保持完整回滚和错误拒绝 | Focused Verified / Full performance pending |
 | [Rendered Native Performance Evidence](current/2026-10-06-rendered-native-performance-evidence.md) | 后期 Boss 实时渲染帧、物理回放端点和严格双日志测量 | Focused Verified / Frame budget pending |
 | [Mode Cohort Rendered Performance](current/2026-10-06-mode-cohort-rendered-performance-evidence.md) | Current frozen production Main frame costs, physical source manifest and paired-log evidence | Measured / 60 FPS and soak gates open |
+| [Native Renderer Comparison](current/2026-10-06-native-renderer-comparison-evidence.md) | Same-source Metal/OpenGL measurement on macOS, actual backend metadata and retained CPU/frame costs | Measured / CPU optimization and 60 FPS gates open |
 | [Boss Action Validator Evidence](current/2026-10-06-boss-action-validator-evidence.md) | Boss 恢复动作模板的单次权威校验与五 Boss 回归证据 | Focused Verified / Full gameplay pending |
 | [Native Hostile Cache Evidence](current/2026-10-06-native-hostile-cache-retention-evidence.md) | 有界目录与动作缓存、原生回归及冻结前后性能对照 | Focused Verified / Performance certification pending |
 | [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |

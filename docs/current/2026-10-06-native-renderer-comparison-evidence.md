@@ -1,7 +1,7 @@
 # Native Renderer Comparison Evidence
 
 - Status: Measured / CPU optimization and 60 FPS gates open
-- Document Role: Same-source Metal and OpenGL Compatibility comparison
+- Document Role: Current same-source Metal and OpenGL Compatibility comparison
 - Authority Level: Below approved full-product completion contract
 - Applies To: Actual production Main, fifth-floor Void Boss phase two
 - Owner: Plane Walker performance lane
