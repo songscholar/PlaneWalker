@@ -28,6 +28,13 @@ func _run() -> void:
 	for index: int in range(ArtCatalog.REQUIRED_GENERATED.controls.size()):
 		sprites.append(_sprite(viewport, &"controls", ArtCatalog.REQUIRED_GENERATED.controls[index], Vector2(44 + index % 11 * 55, 120 + index / 11 * 112)))
 	await _capture_phases(suite, viewport, sprites, "controls")
+	for sprite: Sprite2D in sprites:
+		sprite.queue_free()
+	await get_tree().process_frame
+	sprites.clear()
+	for index: int in range(ArtCatalog.REQUIRED_GENERATED.challenge_rewards.size()):
+		sprites.append(_sprite(viewport, &"challenge_rewards", ArtCatalog.REQUIRED_GENERATED.challenge_rewards[index], Vector2(44 + index * 55, 180)))
+	await _capture_phases(suite, viewport, sprites, "challenge-rewards")
 	viewport.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame

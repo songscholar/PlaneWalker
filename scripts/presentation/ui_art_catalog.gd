@@ -4,6 +4,7 @@ extends RefCounted
 const INVENTORY_PATH := "res://assets/production/ui/pixel_asset_inventory.json"
 const ROOT_PATH := "res://assets/production/ui/"
 const Events := preload("res://scripts/dungeon/dungeon_event_definition.gd")
+const ChallengeRewards := preload("res://scripts/progression/challenge_reward_catalog.gd")
 const REQUIRED_GENERATED := {
 	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
@@ -13,6 +14,7 @@ const REQUIRED_GENERATED := {
 	"event_art": Events.EVENT_IDS,
 	"npc_portraits": ["odysseus", "elara", "sibyl", "hermes", "phia", "morpheus", "nemesis", "vera"],
 	"ending_art": ["return_of_order", "embrace_of_void", "balance_of_ashes", "shattered_freedom", "echo_of_primordial"],
+	"challenge_rewards": ChallengeRewards.IDS,
 	"controls": ["decline_contract", "play", "pause", "copy", "paste", "export", "delete", "back", "settings", "bindings", "restart", "quit", "build", "import", "refresh", "next", "screenshot", "account", "storage", "community", "content", "sharing"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
 	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],

@@ -1215,6 +1215,145 @@
       ]
     },
     {
+      "id": "challenge_rewards",
+      "status": "generated",
+      "scope": "eleven authoritative challenge reward icons",
+      "assets": [
+        {
+          "id": "walker_proof",
+          "path": "challenge_rewards/walker_proof.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "69af43c0a1a09d34e73bae100ace408e41c610db724ceaa43ec622f31220600d"
+        },
+        {
+          "id": "speedwalker_boots",
+          "path": "challenge_rewards/speedwalker_boots.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "d7b45d840c9004eab69d6e5af9b632da96eb877f505021f6620ed5f1c41fa438"
+        },
+        {
+          "id": "walker_entry",
+          "path": "challenge_rewards/walker_entry.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "4f7a7f9f98c33a2fdaed2b8e35cf932ed152b38acf83201b6aa02ab46d1706bc"
+        },
+        {
+          "id": "eternal_walker",
+          "path": "challenge_rewards/eternal_walker.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "8d490e41ea9bef2b82ada291039dbd06c563b340f8dc9d05e0860711e8ca7dca"
+        },
+        {
+          "id": "void_walker",
+          "path": "challenge_rewards/void_walker.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "3c3c56f1ce602596d6e796f2fc2007ea71e6e5796cfa41bc56939440c9ecb415"
+        },
+        {
+          "id": "daily_participation_frame",
+          "path": "challenge_rewards/daily_participation_frame.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "cb8e6180c89689826cd404818d666d11409dc4dfabeb3eaabe26c7dd936a751c"
+        },
+        {
+          "id": "daily_walker_frame",
+          "path": "challenge_rewards/daily_walker_frame.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "680afa2ec397f4b3bc12ee282a1668a9d48852ac314e16fcbe5ec36f3382e633"
+        },
+        {
+          "id": "eternal_traveler",
+          "path": "challenge_rewards/eternal_traveler.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "3671e7051aaa91cc6d9406c967389267d28206ac6504910d5dbe8a2d5399f34b"
+        },
+        {
+          "id": "daily_weapon_skin",
+          "path": "challenge_rewards/daily_weapon_skin.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "29ac3f24fffa8a950e1d004bff82fcc907dec1e21417527ec9215757a42ed6bd"
+        },
+        {
+          "id": "daily_character_color",
+          "path": "challenge_rewards/daily_character_color.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "afcb783d29e2323fe2219875661774be7f0af21f5cd33e5a8c31dda2bc119047"
+        },
+        {
+          "id": "daily_archive_decoration",
+          "path": "challenge_rewards/daily_archive_decoration.png",
+          "kind": "challenge_rewards",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "a3748167e16a4a2d24e21e06e51a6ed4a697c2b1d7fad9f3d1fe34b852e0427b"
+        }
+      ]
+    },
+    {
       "id": "controls",
       "status": "generated",
       "scope": "neutral command symbols",
