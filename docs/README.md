@@ -80,6 +80,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [Gameplay Then UI Completion Plan](superpowers/plans/2026-10-06-gameplay-ui-product-completion.md) | 先完成真实玩法认证，再完成整套 UI 和最终本地产品验收 | Active / Current |
+| [Parallel Gameplay Verification](current/2026-10-06-parallel-gameplay-verification-evidence.md) | 四路并行验证、旧任务终态与真实渲染后期 Boss 测量，保留未达标门禁 | Focused Verified / Full gameplay and UI pending |
 | [Native Hostile Cache Evidence](current/2026-10-06-native-hostile-cache-retention-evidence.md) | 有界目录与动作缓存、原生回归及冻结前后性能对照 | Focused Verified / Performance certification pending |
 | [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |
 | [Native Boss Modifier Teardown Evidence](current/2026-10-06-native-boss-modifier-teardown-evidence.md) | 场景退出时清理首领专属效果、保留其它来源且拒绝离树对象施加新效果 | Focused Verified / Combined certification pending |

@@ -5,6 +5,7 @@
 - Authority Level: Below approved full-product completion contract
 - Applies To: Complete Boss restore, current/historical Action classification
 - Owner: Project integration lead
+- Depends On: [Gameplay completion plan](../superpowers/plans/2026-10-06-gameplay-ui-product-completion.md)
 - Last Verified: 2026-10-06
 - Certification Status: No frame-budget, rendered, saturation, soak, UI or human certification
 

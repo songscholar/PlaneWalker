@@ -5,6 +5,7 @@
 - Authority Level: Below approved full-product completion contract
 - Applies To: Replay backpressure and reward smoke fixtures
 - Owner: Project integration lead
+- Depends On: [Gameplay completion plan](../superpowers/plans/2026-10-06-gameplay-ui-product-completion.md)
 - Last Verified: 2026-10-06
 - Certification Status: Does not certify full coverage, gameplay completion, performance, UI or human playtesting
 

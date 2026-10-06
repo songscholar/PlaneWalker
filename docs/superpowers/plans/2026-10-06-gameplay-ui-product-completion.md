@@ -22,9 +22,10 @@ victory. No remote push or public release is part of this work.
 - [x] Inspect active processes, source state, current evidence and UI gaps.
 - [x] Complete source-bound hostile catalog/action configuration caches with
   typed mutation, identity, eviction and concurrency regressions.
-- [ ] Retain ordinary-input actual Main five-floor victory, all five authenticated
+- [x] Retain ordinary-input actual Main five-floor victory, all five authenticated
   Boss receipts, ending/credits and fresh physical settlement reload. Existing
-  development process and changing-source evidence remain diagnostic.
+  development process and changing-source evidence remain diagnostic. Frozen
+  `ea35dc7` passes this focused gate; later runtime changes require revalidation.
 - [ ] Freeze a committed source inside the workspace and run exactly 750 native
   loadout/Boss cases with all HP phases, paid time receipts, physical checkpoint,
   exact cold continuation and final cleanup.
