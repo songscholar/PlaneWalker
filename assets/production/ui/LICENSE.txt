@@ -1,0 +1,13 @@
+Plane Walker Original UI Art Slice
+
+The weapon, time-ability and player-effect raster atlases in this directory are
+generated locally from deterministic pixel geometry.  No downloaded artwork,
+remote image generation, or third-party image is used.
+
+The artwork is dedicated to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+The dedication applies to artwork only; it does not relicense game code,
+project names, fonts, or third-party dependencies.
+
+Source: tools/production_art/generate_ui_asset_slice.py
+Reproduction: python3 tools/production_art/generate_ui_asset_slice.py

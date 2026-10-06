@@ -1,0 +1,501 @@
+{
+  "schema_id": "plane_walker_pixel_asset_inventory_v1",
+  "schema_version": 1,
+  "generated_by": "tools/production_art/generate_ui_asset_slice.py",
+  "nearest_filter": true,
+  "palette": {
+    "ink": "#111619",
+    "stone": "#242d2d",
+    "edge": "#697771",
+    "bone": "#edf0dc",
+    "muted": "#abb8ac",
+    "patina": "#79baa1",
+    "time": "#61d5e7",
+    "brass": "#e5bd69",
+    "danger": "#f07065",
+    "ember": "#df9b65",
+    "void": "#b897d7"
+  },
+  "batches": [
+    {
+      "id": "actors",
+      "status": "generated",
+      "scope": "five players and five bosses",
+      "assets": [
+        {
+          "id": "forest_heart",
+          "path": "actors/forest_heart.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "5e70d14ca14b24c54aea7a805756a996c9647fce7c889301be2f99a77224a1c3"
+        },
+        {
+          "id": "forge_colossus",
+          "path": "actors/forge_colossus.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "c7f11f4e1ce43dfe493a9faac2dbb024f1f862436451693bda34fe275459f1c7"
+        },
+        {
+          "id": "primordial_knight",
+          "path": "actors/primordial_knight.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "d69576ed520532aa0f1ec52a21b85b9caacc1441215daf73080cb29b905a2753"
+        },
+        {
+          "id": "ruin_king",
+          "path": "actors/ruin_king.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "4dfd8ab1555643b570ec31ecffdcd285b65092899567af9a080b294df3c149f2"
+        },
+        {
+          "id": "time_guardian",
+          "path": "actors/time_guardian.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "1f25e130570325e0eac6f065e4161c40764dec4a997916d801981be53a878d58"
+        },
+        {
+          "id": "time_lord",
+          "path": "actors/time_lord.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "a175fb71656402ffe723a82dd552b1bd6fda93d4dbc53f7a002ae4855ee9946c"
+        },
+        {
+          "id": "time_sovereign",
+          "path": "actors/time_sovereign.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "d01641bfd1c5c0dbd403c5f66ace3b3248d89513477d02af9020655526503afc"
+        },
+        {
+          "id": "void_throne",
+          "path": "actors/void_throne.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "0d5675aa74c4b21fdfc72a46d6b12dd9ee61c6f22c8d2e95c7b44acf952ef289"
+        },
+        {
+          "id": "void_walker",
+          "path": "actors/void_walker.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "f27fdcff75162d93a8fcbb0cc89cf0533d1bbbb0bd868079346a7c1ecede753a"
+        },
+        {
+          "id": "wanderer",
+          "path": "actors/wanderer.png",
+          "kind": "actors",
+          "source_manifest": "actors/manifest.json",
+          "filter": "nearest",
+          "sha256": "4d7d0c81429d16b192262069e36229bbb0225cfc2fb7a25e9ba95ffe96f62041"
+        }
+      ]
+    },
+    {
+      "id": "enemies",
+      "status": "generated",
+      "scope": "five basic enemies",
+      "assets": [
+        {
+          "id": "shattered_sentinel",
+          "path": "enemies/shattered_sentinel.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "0e2d760291d64afbb82f6fd4e25a031e83d6e6729f5c61f309ff8a5adc385953"
+        },
+        {
+          "id": "corrosive_moth",
+          "path": "enemies/corrosive_moth.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "d2d9a7dddb41f332790b6b1bee823ff139021f40507198bb7070a00c598220f2"
+        },
+        {
+          "id": "stone_shell_strider",
+          "path": "enemies/stone_shell_strider.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "9f55259d261ce1bb718e446f8331b017faab0c7520ddfa63322f5cefc65e44e3"
+        },
+        {
+          "id": "ruins_wraith",
+          "path": "enemies/ruins_wraith.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "0cd756af234c41a7e0edb1965c541c886f40158a4ffb421577414f8a8bbe8b25"
+        },
+        {
+          "id": "rift_watcher",
+          "path": "enemies/rift_watcher.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "2b8d017faf87b223618bad9095bc968ae1d05c461e016a5bc07605c39ee42c75"
+        }
+      ]
+    },
+    {
+      "id": "rooms",
+      "status": "generated",
+      "scope": "room tiles, walls, doors and landmarks",
+      "assets": [
+        {
+          "id": "ruins_tiles",
+          "path": "rooms/ruins_tiles.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "27dd89044dbc7f4feb93e62bbe0da5f3762720a5ea89e25cdae428a304cd7a5f"
+        },
+        {
+          "id": "ruins_wall",
+          "path": "rooms/ruins_wall.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "da9aadb721e1be81248fa2c71fa8ac234e9777fc22f1928208f2e600a8a939aa"
+        },
+        {
+          "id": "ruins_door",
+          "path": "rooms/ruins_door.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "b5dee48a8393ce520447c790a8b17f43ed7071b6eb341aa6ef98aeed888da05d"
+        },
+        {
+          "id": "forest_tiles",
+          "path": "rooms/forest_tiles.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "dabb2e4649a4754369a579bf958b559cd9adb343ecce2f7bb8909a00620dd303"
+        },
+        {
+          "id": "forest_wall",
+          "path": "rooms/forest_wall.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "d1c5750c1f094d90db204eb9f0b02ddd3d75a154821e3f830dfc27ce25de582c"
+        },
+        {
+          "id": "forest_door",
+          "path": "rooms/forest_door.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "f652d9275c1972fec274e4b6db922b1d017f259ffc84bfcd53e44277bb495219"
+        },
+        {
+          "id": "rift_tiles",
+          "path": "rooms/rift_tiles.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "b0df956513973430abe32741c1cd6a6a2cb67bedc3fbf29e84c70549342f564a"
+        },
+        {
+          "id": "rift_wall",
+          "path": "rooms/rift_wall.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "cefeec28b831b4d4800f121b5685316c307e0d658645a9dd031617464e01930e"
+        },
+        {
+          "id": "rift_door",
+          "path": "rooms/rift_door.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "6fb7986b687b0170a1d455423e68f3a8b83a37d0ad91a060754a484fe83eb042"
+        },
+        {
+          "id": "forge_tiles",
+          "path": "rooms/forge_tiles.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "d7e136adb93908447f10df78b6e93dd3c085026741cfe823234cae24fe5ac20e"
+        },
+        {
+          "id": "forge_wall",
+          "path": "rooms/forge_wall.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "8f8217a4ceb506bbdc1c75638115568a71fdcb6c41c33346ff3c6d38382c92c9"
+        },
+        {
+          "id": "forge_door",
+          "path": "rooms/forge_door.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "24b7e4b6001d56943800bd9f2d5e504d5801c458b11f2cbbbc936dbcbcdd3db4"
+        },
+        {
+          "id": "void_tiles",
+          "path": "rooms/void_tiles.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "a54f3853fbb4067ea0354ae19bbb1c8d0528a18e66f8f55f76b0489f2c788a92"
+        },
+        {
+          "id": "void_wall",
+          "path": "rooms/void_wall.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "80f5f76d8cfe5e43e46558695681d065d85c0c5168a0e7a45d347ea11b473d11"
+        },
+        {
+          "id": "void_door",
+          "path": "rooms/void_door.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "d9ca6bfcea874a7d25c4369db698377d2bc5832267368e5ff27ba43bda5fc348"
+        },
+        {
+          "id": "landmarks",
+          "path": "rooms/landmarks.png",
+          "kind": "rooms",
+          "source_manifest": "rooms/manifest.json",
+          "filter": "nearest",
+          "sha256": "6d06bbcf13e64f2221bd03c189b79c9ea8f1143f762df0695666cc424393aa2a"
+        }
+      ]
+    },
+    {
+      "id": "weapons",
+      "status": "generated",
+      "scope": "five weapon icons",
+      "assets": [
+        {
+          "id": "sword",
+          "path": "weapons/sword.png",
+          "kind": "weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "435674d43860982667d5d583a08bffed840ccc899ebdc1efbc107a9d37e1f5d0"
+        },
+        {
+          "id": "bow",
+          "path": "weapons/bow.png",
+          "kind": "weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "02aa02d519eb28e0307dc9791d4f5073bb21cf7183c5b9acd61dd75200b3d43d"
+        },
+        {
+          "id": "gun",
+          "path": "weapons/gun.png",
+          "kind": "weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "cacfa764fae002773de47fa04ba1d2deeeb942e77fa517ed52f796fb2db86864"
+        },
+        {
+          "id": "staff",
+          "path": "weapons/staff.png",
+          "kind": "weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "02b7ac21adb514ba5a509711df2612b354c68deca288540a4e205a28cc87357d"
+        },
+        {
+          "id": "gauntlets",
+          "path": "weapons/gauntlets.png",
+          "kind": "weapons",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7c189337ec5cca8fd588cbe6e90acd74313e4367d1ef9c21808a46d195b77651"
+        }
+      ]
+    },
+    {
+      "id": "time_abilities",
+      "status": "generated",
+      "scope": "four time ability icons",
+      "assets": [
+        {
+          "id": "stop",
+          "path": "time_abilities/stop.png",
+          "kind": "time_abilities",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "59291e5b0ff931da38641405fe9f0d6739280f83b1f06c26106ca88aaeb7f0de"
+        },
+        {
+          "id": "rewind",
+          "path": "time_abilities/rewind.png",
+          "kind": "time_abilities",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "1fc906f88dfd054e01214352586366a479ad171bebe3cbcc3e6b509a9ba373af"
+        },
+        {
+          "id": "accelerate",
+          "path": "time_abilities/accelerate.png",
+          "kind": "time_abilities",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "051293c3ba3d66c15f46271d421396949705210bb9658190b507db7b52a992d3"
+        },
+        {
+          "id": "rift",
+          "path": "time_abilities/rift.png",
+          "kind": "time_abilities",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "855bab63974817d7e2f2f103b325b2c5420c706eb9feb4ff75182d0491e5ca15"
+        }
+      ]
+    },
+    {
+      "id": "player_effects",
+      "status": "generated",
+      "scope": "weapon and time projectile/effect strips",
+      "assets": [
+        {
+          "id": "weapon_arc",
+          "path": "player_effects/weapon_arc.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "7a71b796b2a8dc5c96fe9dab3c8058d85e9db4850284042cb1af4bbd6d50e896"
+        },
+        {
+          "id": "arrow_trail",
+          "path": "player_effects/arrow_trail.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "50c79617c18fe92da64a331cf32084558667b5e248a679cfcffd4c944f63eb6a"
+        },
+        {
+          "id": "muzzle_flash",
+          "path": "player_effects/muzzle_flash.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "b33fa9ae5b61fcb038243debbded0f22cc63f363f449dbad80c02eef03114b7f"
+        },
+        {
+          "id": "spell_burst",
+          "path": "player_effects/spell_burst.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "d8108ed173e67cd43fcde7e6348b0201772e05e62d0dbeb5fe189b619b12d370"
+        },
+        {
+          "id": "time_ring",
+          "path": "player_effects/time_ring.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "86cd755eae2be8fae23fc0397a3acf87c7bfd486315c81e57c16eb1dd2c2e560"
+        },
+        {
+          "id": "rift_bloom",
+          "path": "player_effects/rift_bloom.png",
+          "kind": "player_effects",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "bb423b6efd1813c82c5376936d74b6e57f3c7b756298da85a1e4994144d91d5e"
+        }
+      ]
+    }
+  ],
+  "contact_sheet": "pixel_asset_contact_sheet.png",
+  "uncompleted_batches": [
+    "items",
+    "blessings",
+    "curses",
+    "talents",
+    "mode_art",
+    "final_ui_frames",
+    "font"
+  ]
+}

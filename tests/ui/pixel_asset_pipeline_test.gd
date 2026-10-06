@@ -1,0 +1,40 @@
+extends Node
+
+const Suite := preload("res://tests/support/test_suite.gd")
+const Catalog := preload("res://scripts/presentation/ui_art_catalog.gd")
+
+const REQUIRED := {
+	"weapons": ["sword", "bow", "gun", "staff", "gauntlets"],
+	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
+	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
+}
+
+
+func _ready() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var suite := Suite.new()
+	var report: Dictionary = Catalog.validate()
+	suite.assert_true(bool(report.get("ok", false)), "pixel asset catalog validates generated slice")
+	suite.assert_true((report.get("errors", []) as Array).is_empty(), "pixel asset catalog has no errors")
+	var inventory: Dictionary = Catalog.load_inventory()
+	suite.assert_equal(inventory.get("contact_sheet"), "pixel_asset_contact_sheet.png", "inventory keeps the contact sheet")
+	suite.assert_true(FileAccess.file_exists("res://assets/production/ui/pixel_asset_contact_sheet.png"), "pixel asset contact sheet exists")
+	for batch_id: String in REQUIRED:
+		for asset_id: String in REQUIRED[batch_id]:
+			var row := Catalog.asset(StringName(batch_id), StringName(asset_id))
+			suite.assert_true(not row.is_empty(), "%s/%s is declared" % [batch_id, asset_id])
+			var path := Catalog.texture_path(StringName(batch_id), StringName(asset_id))
+			suite.assert_true(FileAccess.file_exists(path), "%s/%s texture path resolves" % [batch_id, asset_id])
+			var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+			suite.assert_true(image != null and not image.is_empty(), "%s/%s raster loads" % [batch_id, asset_id])
+			if image == null or image.is_empty():
+				continue
+			suite.assert_equal(image.get_width(), 128, "%s/%s has four 32px frames" % [batch_id, asset_id])
+			suite.assert_equal(image.get_height(), 32, "%s/%s keeps the 32px frame height" % [batch_id, asset_id])
+			suite.assert_equal(FileAccess.get_sha256(path), str(row.get("sha256", "")), "%s/%s hash is stable" % [batch_id, asset_id])
+		var missing := Catalog.asset(StringName(batch_id), &"missing")
+		suite.assert_true(missing.is_empty(), "%s rejects undeclared asset ids" % batch_id)
+	suite.finish(get_tree())
