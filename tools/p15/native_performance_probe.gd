@@ -18,7 +18,7 @@ var player: Node2D
 var recorder: Node
 var _retention_store: RefCounted
 var _retention_id := ""
-var report := {"schema_version": 1, "measurement_schema_version": 2, "native_process_id": 0, "report_kind": "actual_native_main_performance", "status": "failed", "human_playtests": 0, "unassisted_victory": false, "fps_certified": false, "survival_fixture": str(SURVIVAL), "prerequisite_route_fixture": false, "rendered": false, "content_snapshot": {}, "requested_frames": 0, "accepted_frames": 0, "native_duration_ms": 0.0, "wall_duration_usec": 0, "sample_frames": {}, "metrics": {}, "render_wait": {"count": 0}, "observed_peak_counts": {"actors": 0, "summons": 0, "projectiles": 0, "zones": 0, "constructs": 0, "threats": 0}, "recording": {}, "hub": {}, "failures": []}
+var report := {"schema_version": 1, "measurement_schema_version": 3, "native_process_id": 0, "debug_build": false, "report_kind": "actual_native_main_performance", "status": "failed", "human_playtests": 0, "unassisted_victory": false, "fps_certified": false, "survival_fixture": str(SURVIVAL), "prerequisite_route_fixture": false, "rendered": false, "content_snapshot": {}, "requested_frames": 0, "accepted_frames": 0, "native_duration_ms": 0.0, "wall_duration_usec": 0, "sample_frames": {}, "metrics": {}, "render_wait": {"count": 0}, "observed_peak_counts": {"actors": 0, "summons": 0, "projectiles": 0, "zones": 0, "constructs": 0, "threats": 0}, "recording": {}, "hub": {}, "failures": []}
 
 
 func _ready() -> void:
@@ -27,6 +27,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	suite = Suite.new()
+	report.debug_build = OS.is_debug_build()
 	report.native_process_id = OS.get_process_id()
 	print("NATIVE_PERFORMANCE_PROCESS_PID ", report.native_process_id)
 	report.requested_frames = _option("FRAMES", 600)
@@ -232,6 +233,7 @@ func _measure() -> void:
 	report.wall_duration_usec = Time.get_ticks_usec() - started
 	report.native_duration_ms = float(report.accepted_frames) * 1000.0 / 60.0
 	report["peak_native_static_bytes"] = peak_memory
+	report["native_static_monitor"] = {"source": "Performance.MEMORY_STATIC", "available": peak_memory > 0, "reason": "" if peak_memory > 0 else "debug_monitor_unavailable" if report.debug_build else "release_build"}
 	for key: String in timings:
 		report.metrics[key] = _distribution(timings[key])
 	if report.rendered:

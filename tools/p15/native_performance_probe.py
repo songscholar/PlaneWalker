@@ -8,6 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
+import plistlib
 import re
 import shutil
 import subprocess
@@ -64,10 +65,10 @@ def validate_report(value):
     if any(type(frames.get(key)) is not int for key in ["first", "last", "unique_count"]) or frames["first"] < 0 or frames["last"] - frames["first"] + 1 != count or frames["unique_count"] != count:
         raise ValueError("measured samples must be unique consecutive actual Player frames")
     measurement_version = value.get("measurement_schema_version", 1)
-    if type(measurement_version) is not int or measurement_version not in (1, 2):
+    if type(measurement_version) is not int or measurement_version not in (1, 2, 3):
         raise ValueError("unsupported native measurement schema")
     metrics = value.get("metrics", {})
-    required_metrics = METRICS | FRAME_METRICS if measurement_version == 2 else METRICS
+    required_metrics = METRICS | FRAME_METRICS if measurement_version >= 2 else METRICS
     if not isinstance(metrics, dict) or set(metrics) != required_metrics:
         raise ValueError("independent Player, Host, physics and observer metrics are required")
     for metric in metrics.values():
@@ -78,7 +79,7 @@ def validate_report(value):
         _metric(value.get("render_wait"), count)
     elif value.get("render_wait") != {"count": 0}:
         raise ValueError("headless runs cannot invent render timings")
-    if measurement_version == 2:
+    if measurement_version >= 2:
         work = metrics["frame_work"]["total_usec"]
         wall = metrics["frame_wall"]["total_usec"]
         enclosed_work = metrics["player_advance"]["total_usec"] + metrics["host_process"]["total_usec"]
@@ -101,8 +102,17 @@ def validate_report(value):
     if type(hub.get("frames")) is not int or hub["frames"] < 1 or type(hub.get("visited_functions")) is not int or hub["visited_functions"] < 9:
         raise ValueError("actual three-district nine-function Hub measurement is required")
     _metric(hub.get("scheduler_and_render_wait"), hub["frames"])
-    if not _number(hub.get("wall_duration_usec")) or type(value.get("peak_native_static_bytes")) is not int or value["peak_native_static_bytes"] <= 0:
+    if not _number(hub.get("wall_duration_usec")):
         raise ValueError("actual Hub duration and native memory observation are required")
+    peak_static = value.get("peak_native_static_bytes")
+    if type(peak_static) is not int or peak_static < 0 or measurement_version < 3 and peak_static == 0:
+        raise ValueError("actual Hub duration and native memory observation are required")
+    if measurement_version == 3:
+        monitor = value.get("native_static_monitor")
+        if type(value.get("debug_build")) is not bool or not isinstance(monitor, dict) or set(monitor) != {"source", "available", "reason"} or monitor["source"] != "Performance.MEMORY_STATIC" or type(monitor["available"]) is not bool:
+            raise ValueError("runtime build and static monitor availability must be explicit")
+        if monitor["available"] != (peak_static > 0) or monitor["reason"] != ("" if monitor["available"] else "release_build") or not monitor["available"] and value["debug_build"]:
+            raise ValueError("only a release zero observation can declare the static monitor unavailable")
     return value
 
 
@@ -210,6 +220,46 @@ def _runtime_sources():
     return {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for directory in ["scripts", "autoload"] for path in sorted((ROOT / directory).rglob("*.gd"))}
 
 
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1048576), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _macos_package_plist(binary_argument, resource_argument):
+    binary = binary_argument.absolute()
+    resource = resource_argument.absolute()
+    for path in [binary, resource]:
+        if any(part.is_symlink() for part in [path, *path.parents]):
+            raise ValueError("packaged executable and PCK paths must not contain symlinks")
+    binary = binary.resolve()
+    resource = resource.resolve()
+    contents = binary.parent.parent
+    bundle = contents.parent
+    if binary.parent.name != "MacOS" or contents.name != "Contents" or bundle.suffix != ".app":
+        raise ValueError("packaged mode currently requires a native macOS application bundle")
+    plist = contents / "Info.plist"
+    if not plist.is_file() or plist.is_symlink():
+        raise ValueError("the package must contain a regular Info.plist")
+    try:
+        with plist.open("rb") as stream:
+            metadata = plistlib.load(stream)
+    except (OSError, ValueError, plistlib.InvalidFileException) as error:
+        raise ValueError("package Info.plist is unreadable or malformed") from error
+    if not isinstance(metadata, dict) or metadata.get("CFBundleExecutable") != binary.name:
+        raise ValueError("Info.plist must bind the exact packaged executable")
+    expected = contents / "Resources" / (binary.name + ".pck")
+    if resource != expected:
+        raise ValueError("the PCK must be the executable's automatically loaded bundle resource")
+    for directory in [expected.parent, binary.parent, bundle]:
+        packs = [path for path in directory.iterdir() if path.suffix.lower() == ".pck"]
+        if packs != ([expected] if directory == expected.parent else []):
+            raise ValueError("the bundle must contain exactly one unambiguous automatically loaded PCK")
+    return plist
+
+
 def _source_identity(sources):
     git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True, capture_output=True, check=False)
     own_checkout = git_root.returncode == 0 and Path(git_root.stdout.strip()).resolve() == ROOT
@@ -227,15 +277,35 @@ def main():
     parser.add_argument("--real-time", action="store_true", help="keep wall-clock pacing; otherwise use Godot fixed-fps scheduling")
     parser.add_argument("--rendered", action="store_true")
     parser.add_argument("--timeout", type=int, default=28800)
+    parser.add_argument("--packaged-binary", type=Path, help="run an exported package whose own main scene is the probe")
+    parser.add_argument("--packaged-resource", type=Path, help="authenticate the exported package's PCK alongside its executable")
     args = parser.parse_args()
     output = args.output.resolve()
     if not output.is_relative_to(ROOT / "build") or output.exists():
         parser.error("output must be a new path under this project's build directory")
     if not 1 <= args.frames <= 162000 or not 9 <= args.hub_frames <= 162000 or args.phase > 0 and args.boss_floor < 0 or args.timeout <= 0:
         parser.error("invalid bounded native duration, scheduler or Boss phase")
-    godot = shutil.which(os.environ.get("GODOT_BIN", "godot"))
-    if not godot:
-        parser.error("GODOT_BIN must identify a real Godot executable")
+    if args.packaged_binary is not None:
+        if args.packaged_resource is None:
+            parser.error("--packaged-binary requires --packaged-resource")
+        binary = args.packaged_binary.resolve()
+        resource = args.packaged_resource.resolve()
+        if not binary.is_file() or not os.access(binary, os.X_OK) or not resource.is_file():
+            parser.error("the packaged executable and PCK must exist and the executable must be runnable")
+        try:
+            package_plist = _macos_package_plist(args.packaged_binary, args.packaged_resource)
+        except ValueError as error:
+            parser.error(str(error))
+    else:
+        if args.packaged_resource is not None:
+            parser.error("--packaged-resource requires --packaged-binary")
+        godot = shutil.which(os.environ.get("GODOT_BIN", "godot"))
+        if not godot:
+            parser.error("GODOT_BIN must identify a real Godot executable")
+        binary = Path(godot).resolve()
+        resource = None
+        if not binary.is_file():
+            parser.error("GODOT_BIN must identify an existing Godot executable")
     output.parent.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ)
     environment.update({"PLANEWALKER_PERFORMANCE_OUTPUT": str(output), "PLANEWALKER_PERFORMANCE_FRAMES": str(args.frames), "PLANEWALKER_PERFORMANCE_HUB_FRAMES": str(args.hub_frames), "PLANEWALKER_PERFORMANCE_BOSS_FLOOR": str(args.boss_floor), "PLANEWALKER_PERFORMANCE_PHASE": str(args.phase), "PLANEWALKER_PERFORMANCE_WALL_ACCELERATED": str(not args.real_time).lower(), "PLANEWALKER_PERFORMANCE_RENDERED": str(args.rendered).lower(), "PLANEWALKER_TEST_DATA_DIR": str(output.parent / "isolated-files"), "PLANEWALKER_USER_DATA_DIR": str(output.parent / "isolated-files"), "XDG_DATA_HOME": str(output.parent / "isolated-data")})
@@ -243,14 +313,21 @@ def main():
         environment.pop(key, None)
     stdout_path = output.parent / "stdout.log"
     engine_path = output.parent / "godot.log"
-    command = [godot, "--path", str(ROOT), "--log-file", str(engine_path)]
+    command = [str(binary)]
+    if resource is None:
+        command.extend(["--path", str(ROOT)])
+    command.extend(["--log-file", str(engine_path)])
     if not args.real_time:
         command.extend(["--fixed-fps", "60"])
     if not args.rendered:
         command.append("--headless")
-    command.append("res://tools/p15/native_performance_probe.tscn")
+    if resource is None:
+        command.append("res://tools/p15/native_performance_probe.tscn")
     sources = _runtime_sources()
     source_identity = _source_identity(sources)
+    source_identity.update(runtime_kind="packaged_binary" if resource is not None else "source_project", source_checkout_role="harness_only" if resource is not None else "executed_project", godot_binary=str(binary), godot_binary_sha256=_file_sha256(binary), command=command)
+    if resource is not None:
+        source_identity.update(packaged_resource=str(resource), packaged_resource_sha256=_file_sha256(resource), packaged_resource_binding="macos_bundle_autoload", package_info_plist=str(package_plist), package_info_plist_sha256=_file_sha256(package_plist))
     manifest_path = output.with_name("source-manifest.json")
     manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources}, indent=2, sort_keys=True) + "\n")
     result = None
@@ -268,9 +345,21 @@ def main():
         source_identity["runtime_source_stable"] = _runtime_sources() == sources
         source_identity["process_exit_code"] = result.returncode if result is not None else None
         source_identity["timed_out"] = timed_out
+        for path, field in [(binary, "godot_binary")] + ([(resource, "packaged_resource"), (package_plist, "package_info_plist")] if resource is not None else []):
+            try:
+                final_digest = _file_sha256(path)
+            except OSError:
+                final_digest = ""
+            source_identity[field + "_final_sha256"] = final_digest
+            source_identity[field + "_stable"] = final_digest == source_identity[field + "_sha256"]
+        if resource is not None:
+            try:
+                source_identity["packaged_layout_stable"] = _macos_package_plist(args.packaged_binary, args.packaged_resource) == package_plist
+            except (OSError, ValueError):
+                source_identity["packaged_layout_stable"] = False
         logs = stdout_path.read_text(errors="replace") + (engine_path.read_text(errors="replace") if engine_path.is_file() else "")
         source_identity["runtime_logs_clean"] = not bool(re.search(r"SCRIPT ERROR:|Parse Error:|ERROR:|ObjectDB instances leaked|RID allocations leaked", logs))
-        execution_ok = result is not None and result.returncode == 0 and source_identity["runtime_source_stable"] and source_identity["runtime_logs_clean"]
+        execution_ok = result is not None and result.returncode == 0 and source_identity["runtime_source_stable"] and source_identity["runtime_logs_clean"] and source_identity["godot_binary_stable"] and source_identity.get("packaged_resource_stable", True) and source_identity.get("package_info_plist_stable", True) and source_identity.get("packaged_layout_stable", True)
         manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources, "execution_status": "pass" if execution_ok else "failed"}, indent=2, sort_keys=True) + "\n")
         if output.is_file():
             retained = json.loads(output.read_text())
@@ -280,6 +369,8 @@ def main():
                 retained["status"] = "failed"
             elif retained.get("status") == "pass":
                 try:
+                    if resource is not None and retained.get("measurement_schema_version") != 3:
+                        raise ValueError("packaged measurements require explicit v3 runtime build and monitor metadata")
                     validate_report(retained)
                 except ValueError as error:
                     retained["status"] = "failed"
@@ -290,6 +381,8 @@ def main():
         raise SystemExit(f"actual native performance run failed; inspect {stdout_path}")
     if not source_identity["runtime_source_stable"]:
         raise SystemExit("runtime sources changed during native performance measurement")
+    if not source_identity["godot_binary_stable"] or not source_identity.get("packaged_resource_stable", True) or not source_identity.get("package_info_plist_stable", True) or not source_identity.get("packaged_layout_stable", True):
+        raise SystemExit("runtime executable, packaged PCK, Info.plist or bundle layout changed during native performance measurement")
     report = validate_report(json.loads(output.read_text()))
     print(json.dumps({"report": str(output), "measurement_schema_version": report.get("measurement_schema_version", 1), "accepted_frames": report["accepted_frames"], "native_duration_ms": report["native_duration_ms"], "wall_duration_usec": report["wall_duration_usec"], "player_advance": report["metrics"]["player_advance"], "frame_work": report["metrics"].get("frame_work"), "frame_wall": report["metrics"].get("frame_wall"), "process_rss": report.get("process_rss"), "observed_peak_counts": report["observed_peak_counts"]}, indent=2))
 

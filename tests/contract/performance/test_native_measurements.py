@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tests.contract.performance.test_native_performance_probe import api, report
+from tests.contract.performance.test_native_performance_probe import api, fixture_executable, report
 
 
 def measured_report():
@@ -161,6 +161,7 @@ class NativeMeasurementContract(unittest.TestCase):
                 root = Path(directory).resolve()
                 (root / "scripts").mkdir()
                 (root / "scripts/runtime.gd").write_text("extends Node\n", encoding="utf-8")
+                binary = fixture_executable(root)
                 output = root / "build/measurement/report.json"
                 native_report = measured_report()
                 rss = native_report.pop("process_rss")
@@ -169,12 +170,12 @@ class NativeMeasurementContract(unittest.TestCase):
                     rss["peak_bytes"] = 0
 
                 def run(command, **kwargs):
-                    if command[0] != "/fixture/godot":
+                    if command[0] != str(binary):
                         return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
                     output.write_text(json.dumps(native_report), encoding="utf-8")
                     return subprocess.CompletedProcess(command, 0)
 
-                with patch.object(api, "ROOT", root), patch.object(api.shutil, "which", return_value="/fixture/godot"), patch.object(api.subprocess, "run", side_effect=run), patch.object(api, "_ProcessRssSampler") as sampler, patch.object(sys, "argv", ["probe", "--output", str(output), "--frames", "120", "--hub-frames", "12"]), patch("builtins.print"):
+                with patch.object(api, "ROOT", root), patch.object(api.shutil, "which", return_value=str(binary)), patch.object(api.subprocess, "run", side_effect=run), patch.object(api, "_ProcessRssSampler") as sampler, patch.object(sys, "argv", ["probe", "--output", str(output), "--frames", "120", "--hub-frames", "12"]), patch("builtins.print"):
                     sampler.return_value.snapshot.return_value = rss
                     if missing_samples:
                         with self.assertRaises(ValueError):
