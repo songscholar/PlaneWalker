@@ -115,7 +115,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "0e2d760291d64afbb82f6fd4e25a031e83d6e6729f5c61f309ff8a5adc385953"
+          "sha256": "7e2d0d0c54d038d811dd539472c94025f36569f20f42e31dbb407909339b00ec"
         },
         {
           "id": "corrosive_moth",
@@ -123,7 +123,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "d2d9a7dddb41f332790b6b1bee823ff139021f40507198bb7070a00c598220f2"
+          "sha256": "537af2e24e1b61d1fd35aea8a43a8a917652507a38c9f58e80f5da1dc8b975d0"
         },
         {
           "id": "stone_shell_strider",
@@ -131,7 +131,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "9f55259d261ce1bb718e446f8331b017faab0c7520ddfa63322f5cefc65e44e3"
+          "sha256": "40a6fd34beb8c86bf1ea828edd7114de2b91b16e2f8c00e355786d9427bc0c9e"
         },
         {
           "id": "ruins_wraith",
@@ -139,7 +139,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "0cd756af234c41a7e0edb1965c541c886f40158a4ffb421577414f8a8bbe8b25"
+          "sha256": "37953be7ca81147bce573edce7d84bdd44936cef5f6c4d3eb8d45c2b656218c8"
         },
         {
           "id": "rift_watcher",
@@ -147,7 +147,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "2b8d017faf87b223618bad9095bc968ae1d05c461e016a5bc07605c39ee42c75"
+          "sha256": "0fc31e36c8d1a8d05d9f86b31155cac9e8a668ebe8e167e30b34f7234fdae9c6"
         },
         {
           "id": "void_hunter",
@@ -155,7 +155,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "93523df6d8c6f4807d7ea2d51889a118a16f5a362699038f61238a613d72141b"
+          "sha256": "00bcfcfa821634751ff72a982a5ee79d7898a3e570f1cb98fed7c93eb65de530"
         },
         {
           "id": "void_archer",
@@ -163,7 +163,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "4b9bb9f377542cb5ccee803dc3eb6e9d01554c56c00961d8041c529a2ccc9b99"
+          "sha256": "2e4c9a0e96f4a68e93dea09b125d3e90ba9202f417a995c5839ef657618102fc"
         },
         {
           "id": "bramble_mage",
@@ -171,7 +171,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "14a8f21afad55857b1f171db057b6d93f730619f359567f486f241c443c04ed5"
+          "sha256": "ddf3239593706bda3e0f9aaf58a2c4688a767440e09a0fdb5adece5a35a5abd2"
         },
         {
           "id": "void_spore",
@@ -179,7 +179,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "1a5abd97142648dd4b87f2572eef42a0d257f5828c636e41dbef2b73a2fa6797"
+          "sha256": "1e83455c14d2206ab711dd9e0bc5cd56272ffb88d5d026cd88eaa8360db33733"
         },
         {
           "id": "forest_caller",
@@ -187,7 +187,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "19ba7c37e7c4f2ec10ffd448796fa076bc7d8c37f587dc3599edc4f1cf16ff25"
+          "sha256": "1736c6e1bfaefddabfc56d9a778774699bb257d484333db6c5e7ffe71cb6c6ab"
         },
         {
           "id": "shadow_lurker",
@@ -195,7 +195,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "9bdc9357eee1018aa01768a5f9eb8de0a873996a622f60aed6b6c0d87875fd8b"
+          "sha256": "89526c07f24b6a58b93e1c822aa845c3102271b9f5ccb767d4b5ec9f8d44b76f"
         },
         {
           "id": "chrono_guard",
@@ -203,7 +203,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "3fa9baf3eef6f9b453ac188cec706bb2493f5480008bce91b6321a698d9176b7"
+          "sha256": "6e010e9c41edeb3f9d4e2b2dbc934d7dfd66ba687fc3e8bd6b6a1b3422a50190"
         },
         {
           "id": "rift_weaver",
@@ -211,7 +211,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "e9222ac84e2be2042bced9b51eff246ee236af66af9cb382139010bc3bc32abd"
+          "sha256": "ee4049f424b5d077246da4fa8a6d71c994728a70136b475de761dd41f853924a"
         },
         {
           "id": "blink_striker",
@@ -219,7 +219,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "ecbfb9f5c57f54f12214a644a3c92a9a90154908a1742c5fb3bc7fe5e812e584"
+          "sha256": "92f3f34f869c042d016d7a870096292ad3bd02d64be5362e816419e72278dfde"
         },
         {
           "id": "rewind_priest",
@@ -227,7 +227,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "11e34c9696dab25d70eb550fee7e82f22cfcaa051d3397a40c050d76680dac33"
+          "sha256": "95d85178de16e5680504350de1a3b8ef43cc3289af99758c8fe28e297ff6ba89"
         },
         {
           "id": "chrono_storm_elemental",
@@ -235,7 +235,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "abf7cecbbbc091588c736b56c0274205d39f229bc5be985c52fd0994df24f4ff"
+          "sha256": "0b8e156c785be26bb44aadd5a42abeb69defd9d12375d13d447845100c125ef1"
         },
         {
           "id": "eternal_hound",
@@ -243,7 +243,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "dbadf2406b4122a731448ebb93ea3d4fa0cc920b037622bdaeebe8e38fb66f6a"
+          "sha256": "aa2282fad9701139650b7cf1735027e2a2d1660570e909b7eff3b36d7663381d"
         },
         {
           "id": "forge_titan",
@@ -251,7 +251,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "86409d4917963fdb943eaa85799a06e3ebe196f95784cb0a0176e160b88dae50"
+          "sha256": "752e5aac36e9ebea94ebb6eaa71d24b4a8b0850f02fe372fd2a06a87706c7bf0"
         },
         {
           "id": "void_web_weaver",
@@ -259,7 +259,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "b9f27350949bfd4ca1b939dc54aa9dc7be1bc520b34a0cc57f486e5022fd04af"
+          "sha256": "01767a5e597a021bbf2476f4633144675b4e8c3d18c2b2d8199e09fe83cdbf72"
         },
         {
           "id": "phase_ranger",
@@ -267,7 +267,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "e7930c7c29c7aecb559ea43960f98e2739af0386cf39a33e9ce76b791d0f9e15"
+          "sha256": "f0eb5378d16e9b388763e5f4afa48fde9ad5c14e6813436c66e43c3e45396537"
         },
         {
           "id": "chaos_amalgam",
@@ -275,7 +275,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "394e90ea91352445b0b6d330f0c93dc7c72d9b84ada56fd196960fa32bb4428e"
+          "sha256": "02083c9955fc7826b1a6f48e553fc5176463484ee27adf1b81fbb714656b7159"
         },
         {
           "id": "plane_ripper",
@@ -283,7 +283,7 @@
           "kind": "enemies",
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
-          "sha256": "c7577174f8318b6a6a282c6076eb998b4e06efbaf4b94441fd8ddf76f3498e1e"
+          "sha256": "021e321fd34cb0b88360d3cb510b191590650b965b34d39166becfa0dd13037d"
         }
       ]
     },

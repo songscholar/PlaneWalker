@@ -16,14 +16,22 @@ OUTPUT = ROOT / "assets/production/enemies"
 SCENES = ROOT / "data/content_packs/base/assets/enemies/launch"
 PHASES = ("idle", "warning", "active", "recovery")
 PRESERVED = {"shattered_sentinel", "corrosive_moth", "stone_shell_strider", "ruins_wraith"}
-INK = (24, 28, 35, 255)
-PALE = (224, 237, 225, 255)
-GOLD = (227, 187, 79, 255)
+INK = (17, 22, 25, 255)
+PALE = (237, 240, 220, 255)
+GOLD = (229, 189, 105, 255)
 PALETTES = {
-    "floor_ruins_of_remnant": ((123, 150, 150, 255), (57, 76, 84, 255), (111, 229, 213, 255)),
-    "floor_void_forest": ((102, 161, 94, 255), (43, 66, 65, 255), (211, 108, 177, 255)),
-    "floor_time_rift": ((176, 180, 192, 255), (72, 81, 101, 255), (105, 218, 230, 255)),
-    "floor_plane_forge": ((183, 110, 103, 255), (70, 58, 75, 255), (248, 191, 77, 255)),
+    "floor_ruins_of_remnant": ((105, 119, 113, 255), (55, 67, 66, 255), (97, 213, 231, 255)),
+    "floor_void_forest": ((121, 186, 161, 255), (79, 146, 126, 255), (211, 106, 155, 255)),
+    "floor_time_rift": ((201, 215, 210, 255), (62, 79, 104, 255), (97, 213, 231, 255)),
+    "floor_plane_forge": ((193, 125, 84, 255), (155, 94, 72, 255), (229, 189, 105, 255)),
+}
+LIGHTS = {
+    PALETTES["floor_ruins_of_remnant"][0]: (171, 184, 172, 255),
+    PALETTES["floor_void_forest"][0]: (143, 174, 117, 255),
+    PALETTES["floor_time_rift"][0]: PALE,
+    PALETTES["floor_plane_forge"][0]: (223, 155, 101, 255),
+    GOLD: (232, 213, 165, 255),
+    (184, 151, 215, 255): (201, 215, 210, 255),
 }
 LICENSE = """Plane Walker Original Launch Enemy Artwork
 
@@ -50,6 +58,8 @@ class Pixel:
         if outline:
             self.draw.rectangle((x - 1, y - 1, x + w, y + h), fill=INK)
         self.draw.rectangle((x, y, x + w - 1, y + h - 1), fill=color)
+        if color in LIGHTS and w >= 4 and h >= 4:
+            self.draw.polygon([(x + w // 2, y), (x + w - 1, y), (x + w - 1, y + max(1, h // 3)), (x + w - 3, y + 1)], fill=LIGHTS[color])
 
     def poly(self, points, color):
         self.draw.polygon(points, fill=color)
@@ -61,9 +71,20 @@ class Pixel:
 
     def oval(self, box, color):
         self.draw.ellipse(box, fill=color, outline=INK, width=1)
+        if color in LIGHTS and box[2] - box[0] >= 6:
+            x0, y0, x1, y1 = box
+            self.draw.ellipse((x0 + (x1 - x0) // 2, y0 + 2, x1 - 2, y0 + (y1 - y0) // 2), fill=LIGHTS[color])
 
     def gem(self, x, y, radius, color):
         self.poly([(x, y - radius), (x + radius, y), (x, y + radius), (x - radius, y)], color)
+        if radius >= 3:
+            self.draw.polygon([(x, y - radius + 1), (x + radius - 1, y), (x, y)], fill=LIGHTS.get(color, PALE))
+
+    def marks(self, points, color, width=1):
+        self.draw.line(points, fill=color, width=width)
+
+    def facet(self, points, color):
+        self.draw.polygon(points, fill=color)
 
 
 def frame(definition, phase):
@@ -81,13 +102,16 @@ def frame(definition, phase):
         c.box(28 + x, 35 + y, 5, 7, shadow)
         c.poly([(6, 21), (16, 18), (18, 33), (12, 39), (5, 32)], GOLD)
         c.box(9, 24, 6, 9, shadow)
-        c.line([(33 + x, 23), (40 + x, 18), (40 + x, 34)], body, 3)
+        c.line([(33 + x, 23), (35 + x, 28)], body, 3)
+        tip = ((42, 15), (35, 5), (44, 32), (40, 38))[phase]
+        c.line([(35 + x, 28), tip], PALE, 2)
+        c.line([(32 + x, 25), (38 + x, 29)], GOLD, 1)
         c.line([(26, 11 + y), (23, 14 + y), (26, 16 + y)], shadow, 1)
     elif species == "corrosive_moth":
         for side in (-1, 1):
             wing = 2 if phase in (0, 2) else 6
             c.poly([(24, 22), (24 + side * 17, 8 + wing), (24 + side * 20, 23), (24 + side * 11, 32)], body)
-            c.gem(24 + side * 12, 22, 4, (168, 224, 85, 255))
+            c.gem(24 + side * 12, 22, 4, (143, 174, 117, 255))
             c.line([(24 + side * 2, 16), (24 + side * 7, 9)], GOLD, 1)
         c.oval((20, 15 + y, 28, 36 + y), shadow)
         c.box(22, 20 + y, 4, 10, GOLD, False)
@@ -103,7 +127,7 @@ def frame(definition, phase):
         c.poly([(35, 23), (42, 22), (44, 31), (36, 34)], shadow)
         c.box(40, 25, 2, 2, glow, False)
     elif species == "ruins_wraith":
-        c.poly([(14 + x, 12 + y), (24 + x, 6 + y), (33 + x, 13 + y), (36 + x, 38), (29, 34), (25, 41), (20, 34), (12, 39)], (162, 142, 194, 255))
+        c.poly([(14 + x, 12 + y), (24 + x, 6 + y), (33 + x, 13 + y), (36 + x, 38), (29, 34), (25, 41), (20, 34), (12, 39)], (184, 151, 215, 255))
         c.oval((16 + x, 12 + y, 31 + x, 27 + y), PALE)
         c.box(19 + x, 18 + y, 3, 3, INK, False)
         c.box(26 + x, 18 + y, 3, 3, INK, False)
@@ -122,8 +146,9 @@ def frame(definition, phase):
         c.poly([(15 + x, 13 + y), (29 + x, 12 + y), (36, 34), (20, 40), (9, 33)], shadow)
         c.poly([(16 + x, 12 + y), (15, 6), (22, 9), (29, 6), (30 + x, 14 + y), (25, 21), (18, 20)], body)
         c.box(18 + x, 14 + y, 10, 2, glow, False)
-        c.line([(13, 23), (7, 32), (4, 29)], glow, 2)
-        c.line([(30, 23), (40, 28), (43, 22)], glow, 2)
+        hand_y = (0, -5, 5, 2)[phase]
+        c.line([(13, 23), (7, 32 + hand_y), (4, 29 + hand_y)], glow, 2)
+        c.line([(30, 23), (40, 28 + hand_y), (43, 22 + hand_y)], glow, 2)
         c.line([(21, 34), (15 + x, 42)], body, 3)
         c.line([(29, 33), (35 + x, 40)], body, 3)
     elif species == "void_archer":
@@ -134,8 +159,9 @@ def frame(definition, phase):
         c.line([(17, 35), (14 + x, 42)], body, 3)
         c.line([(27, 35), (30 + x, 42)], body, 3)
         c.line([(35, 10), (41 + x, 23), (35, 36)], GOLD, 2)
-        c.line([(35, 10), (35, 36)], PALE, 1)
-        c.line([(25, 23), (43, 23)], glow, 1)
+        draw_x = (35, 29, 36, 33)[phase]
+        c.line([(35, 10), (draw_x, 23), (35, 36)], PALE, 1)
+        c.line([(draw_x - 6, 23), (43, 23)], glow, 1)
     elif species == "bramble_mage":
         c.poly([(16, 19), (30, 19), (35, 40), (11, 40)], shadow)
         c.poly([(9, 15 + y), (18, 12 + y), (23, 4 + y), (28, 12 + y), (37, 15 + y)], body)
@@ -144,7 +170,7 @@ def frame(definition, phase):
         c.line([(10, 30), (5, 20), (7, 8)], body, 2)
         c.poly([(5, 23), (2, 19), (8, 18)], glow)
         c.line([(37, 37), (39, 13)], GOLD, 2)
-        c.gem(39, 10, 4, glow)
+        c.gem(39, 10, (3, 4, 6, 2)[phase], glow)
     elif species == "void_spore":
         for dx, dy in ((-13, 1), (10, -10), (9, 11), (-5, -13), (-10, 12)):
             c.line([(24, 23), (24 + dx, 23 + dy + y)], shadow, 2)
@@ -216,7 +242,8 @@ def frame(definition, phase):
         c.box(7, 24, 10, 5, PALE, False)
         c.box(11, 24, 1, 6, GOLD, False)
         c.line([(38, 38), (39, 12)], GOLD, 2)
-        c.oval((34, 6, 44, 16), glow)
+        orb = (0, 1, 2, -1)[phase]
+        c.oval((34 - orb, 6 - orb, 44 + orb, 16 + orb), glow)
         c.line([(38, 10), (41, 10), (38, 13)], shadow, 1)
     elif species == "chrono_storm_elemental":
         c.poly([(21, 5), (32, 8), (30, 18), (39, 22), (30, 29), (32, 36), (24, 44), (15, 36), (18, 28), (9, 23), (18, 18)], body)
@@ -236,10 +263,11 @@ def frame(definition, phase):
         c.box(13, 15 + y, 23, 23, body)
         c.box(17, 6 + y, 15, 11, shadow)
         c.box(18, 10 + y, 13, 3, glow, False)
-        c.box(5, 15, 8, 20, shadow)
-        c.box(36, 14, 8, 23, shadow)
-        c.box(4, 13, 10, 5, body)
-        c.box(35, 12, 10, 6, body)
+        arm_y = (0, -5, 4, 2)[phase]
+        c.box(5, 15 + arm_y, 8, 20, shadow)
+        c.box(36, 14 + arm_y, 8, 23, shadow)
+        c.box(4, 13 + arm_y, 10, 5, body)
+        c.box(35, 12 + arm_y, 10, 6, body)
         c.box(14 + x, 38, 8, 6, shadow)
         c.box(28 + x, 38, 8, 6, shadow)
         c.box(18, 21 + y, 14, 12, INK)
@@ -288,6 +316,163 @@ def frame(definition, phase):
         c.line([(28, 37), (34 + x, 43)], body, 2)
     else:
         raise ValueError("No authored silhouette: " + species)
+
+    light = LIGHTS[body]
+    if species == "shattered_sentinel":
+        c.facet([(28 + x, 12 + y), (31 + x, 13 + y), (30 + x, 29 + y), (26 + x, 29 + y)], light)
+        c.marks([(19 + x, 24 + y), (23 + x, 26 + y), (21 + x, 31 + y)], INK)
+        c.marks([(8, 23), (13, 21), (15, 31), (12, 35)], PALE)
+        c.box(19 + x, 32 + y, 11, 2, GOLD, False)
+        c.box(28 + x, 39 + y, 4, 2, light, False)
+        c.gem(12, 29, 2, glow)
+    elif species == "corrosive_moth":
+        for side in (-1, 1):
+            wing_y = 8 + (2 if phase in (0, 2) else 6)
+            c.marks([(24 + side * 3, 23), (24 + side * 14, wing_y + 5), (24 + side * 17, 23)], shadow)
+            c.marks([(24 + side * 5, 25), (24 + side * 11, 29)], light)
+            c.box(24 + side * 12, 21, 2, 2, PALE, False)
+        for segment in (24, 28, 32):
+            c.marks([(22, segment + y), (26, segment + y)], INK)
+        c.line([(22, 34 + y), (19, 38 + y)], shadow, 1)
+        c.line([(26, 34 + y), (30, 38 + y)], shadow, 1)
+    elif species == "stone_shell_strider":
+        for px in (13, 21, 29):
+            c.facet([(px + 1, 14 + y), (px + 5, 16 + y), (px + 4, 25 + y), (px + 1, 24 + y)], light)
+            c.marks([(px - 3, 18 + y), (px - 4, 22 + y), (px - 2, 25 + y)], shadow)
+        c.box(38, 30, 4, 2, PALE, False)
+        for lx in (9, 19, 32):
+            c.box(lx - 1 + x, 37, 3, 2, body, False)
+    elif species == "ruins_wraith":
+        c.facet([(29 + x, 10 + y), (32 + x, 16 + y), (31 + x, 31), (28 + x, 35)], light)
+        c.marks([(18 + x, 15 + y), (22 + x, 14 + y), (25 + x, 16 + y)], shadow)
+        c.box(23 + x, 21 + y, 2, 3, INK, False)
+        c.marks([(19, 28), (20, 33), (18, 36)], (118, 87, 154, 255))
+        c.marks([(26, 29), (25, 36)], PALE)
+        c.box(7, 25 + y, 3, 2, PALE, False)
+        c.box(38, 25 - y, 3, 2, PALE, False)
+    elif species == "rift_watcher":
+        c.facet([(28, 9), (32, 10), (35, 17), (30, 16)], light)
+        c.marks([(17, 10), (20, 13), (18, 17)], shadow)
+        c.marks([(14, 32), (19, 30), (22, 33), (20, 37)], shadow)
+        c.marks([(31, 31), (33, 36)], light, 2)
+        c.box(26 + x, 20 + y, 2, 2, PALE, False)
+    elif species in ("void_hunter", "plane_ripper"):
+        c.facet([(27 + x, 18 + y), (31, 24), (29, 31), (26, 28)], body)
+        c.facet([(20 + x, 22 + y), (24 + x, 20 + y), (25, 31), (21, 32)], light)
+        c.marks([(19 + x, 17 + y), (22 + x, 18 + y), (26 + x, 17 + y)], PALE)
+        c.box(18 + x, 34, 5, 2, GOLD, False)
+        c.box(28 + x, 33, 4, 2, body, False)
+        claw_y = (0, -5, 5, 2)[phase] if species == "void_hunter" else 0
+        for hand_x in (7, 39):
+            c.marks([(hand_x, 27 + claw_y), (hand_x - 2, 31 + claw_y)], PALE)
+            c.marks([(hand_x + 2, 27 + claw_y), (hand_x, 32 + claw_y)], light)
+    elif species == "void_archer":
+        c.facet([(24, 23), (29, 25), (30, 33), (24, 31)], body)
+        c.marks([(18, 24), (17, 33), (21, 30)], body)
+        c.box(19, 25, 10, 2, GOLD, False)
+        c.line([(24, 23), (30 - phase, 24 + phase)], body, 2)
+        c.box(29 - phase, 22 + phase, 3, 3, light, False)
+        c.marks([(35, 12), (39, 20)], PALE)
+        c.marks([(35, 32), (38, 28)], light)
+    elif species == "bramble_mage":
+        c.facet([(25, 23), (28, 23), (32, 37), (27, 34)], body)
+        c.marks([(18, 24), (17, 32), (19, 37)], body, 2)
+        c.box(15, 35, 15, 2, GOLD, False)
+        c.marks([(23, 8 + y), (28, 13 + y), (34, 14 + y)], light)
+        c.marks([(39, 15), (41, 19), (38, 23), (39, 30)], shadow)
+        c.gem(24, 27, 3, glow)
+    elif species == "void_spore":
+        c.marks([(18 + x, 27 + y), (21 + x, 29 + y), (24 + x, 30 + y)], shadow, 2)
+        c.box(26 + x, 17 + y, 3, 3, PALE, False)
+        c.marks([(20 + x, 21 + y), (22 + x, 18 + y)], light)
+        for dx, dy in ((-13, 1), (10, -10), (9, 11), (-5, -13), (-10, 12)):
+            c.box(24 + dx, 21 + dy + y, 2, 2, PALE, False)
+    elif species == "forest_caller":
+        c.facet([(27, 25), (30, 28), (30, 34), (27, 32)], light)
+        c.marks([(19, 26), (22, 29), (20, 35)], shadow)
+        c.marks([(24, 14 + y), (24, 19 + y), (28, 22 + y)], GOLD)
+        c.box(19, 33, 9, 3, shadow, False)
+        c.marks([(31, 7), (35, 4)], PALE)
+        c.marks([(33, 37), (31, 40)], light, 2)
+    elif species == "shadow_lurker":
+        c.facet([(17, 12 + y), (20, 17 + y), (16, 21 + y)], light)
+        c.facet([(29, 13 + y), (32, 21 + y), (28, 20 + y)], light)
+        c.facet([(23, 26), (29, 28), (33, 34), (27, 32)], body)
+        c.marks([(20, 25 + y), (24, 27 + y), (29, 25 + y)], PALE)
+        c.marks([(11 + x, 36), (8 + x, 38), (12 + x, 39)], PALE)
+        c.marks([(38 + x, 36), (40 + x, 39)], light)
+    elif species == "chrono_guard":
+        c.facet([(26, 9 + y), (30, 10 + y), (29, 12 + y), (25, 11 + y)], light)
+        c.box(16, 18 + y, 15, 2, GOLD, False)
+        c.marks([(20, 24 + y), (25, 23 + y), (29, 27 + y)], PALE)
+        c.marks([(21, 34 + y), (24, 35 + y), (28, 33 + y)], GOLD)
+        c.box(12, 27, 4, 3, body, False)
+        c.box(33, 27, 4, 3, light, False)
+        c.box(17 + x, 40, 4, 2, light, False)
+    elif species == "rift_weaver":
+        c.facet([(26, 17), (29, 20), (33, 33), (28, 30)], body)
+        c.marks([(19, 25), (17, 35), (21, 32)], light)
+        for side in (-1, 1):
+            c.gem(24 + side * 13, 18 + y, 2, GOLD)
+            c.marks([(24 + side * 14, 22), (24 + side * 14, 27)], light)
+        c.box(24, 8 + y, 2, 2, PALE, False)
+    elif species == "blink_striker":
+        c.facet([(26 + x, 18 + y), (30 + x, 22 + y), (30, 30), (25, 26)], light)
+        c.marks([(19, 22), (23, 24), (21, 29)], shadow)
+        c.box(19, 31, 11, 2, GOLD, False)
+        c.marks([(18 + x, 13 + y), (24 + x, 9 + y)], body)
+        c.gem(11, 22, 2, PALE)
+        c.gem(37, 19, 2, PALE)
+    elif species == "rewind_priest":
+        c.facet([(27, 21), (29, 25), (32, 37), (27, 34)], light)
+        c.marks([(18, 28), (16, 37), (19, 35)], shadow, 2)
+        c.box(18, 24, 11, 2, GOLD, False)
+        c.marks([(8, 25), (10, 25)], shadow)
+        c.marks([(13, 25), (15, 25)], shadow)
+        c.box(28, 9 + y, 2, 4, PALE, False)
+        c.box(39, 8, 2, 2, PALE, False)
+    elif species == "chrono_storm_elemental":
+        c.facet([(27, 8), (30, 10), (26, 17), (24, 16)], light)
+        c.facet([(31, 22), (35, 22), (28, 27)], PALE)
+        c.facet([(27, 33), (29, 36), (25, 40), (24, 37)], light)
+        c.marks([(21, 17 + y), (20, 22 + y), (23, 29 + y)], glow)
+    elif species == "eternal_hound":
+        c.facet([(23 + x, 22 + y), (29 + x, 24 + y), (27 + x, 30 + y), (23 + x, 28 + y)], light)
+        c.marks([(16 + x, 28 + y), (20 + x, 30 + y), (22 + x, 33 + y)], shadow)
+        c.marks([(35, 25 + y), (41, 24 + y)], PALE)
+        c.line([(20, 33), (21 - x, 40)], shadow, 2)
+        c.line([(28, 32), (27 - x, 40)], shadow, 2)
+        c.box(13 + x, 39, 4, 2, light, False)
+        c.box(31 + x, 38, 4, 2, light, False)
+    elif species == "forge_titan":
+        c.facet([(31, 17 + y), (34, 18 + y), (34, 34), (31, 32)], light)
+        c.marks([(15, 20 + y), (17, 22 + y), (16, 28 + y)], shadow)
+        c.box(14, 35, 20, 2, GOLD, False)
+        c.box(6, 22 + arm_y, 5, 4, body, False)
+        c.box(37, 21 + arm_y, 5, 4, light, False)
+        c.marks([(19, 8 + y), (23, 8 + y)], PALE)
+        c.box(30 + x, 39, 5, 3, body, False)
+    elif species == "void_web_weaver":
+        c.marks([(28, 13 + y), (30, 19 + y), (27, 23 + y)], body, 2)
+        for eye_x in (19, 22, 26, 29):
+            c.box(eye_x, 23 + y, 1, 2, PALE, False)
+        c.marks([(22 + x, 31 + y), (27 + x, 34 + y)], GOLD)
+        for side in (-1, 1):
+            for offset in (-8, 0, 8):
+                c.box(23 + side * 16, 20 + offset + y, 2, 2, light, False)
+    elif species == "phase_ranger":
+        c.facet([(27 + x, 9 + y), (29 + x, 9 + y), (29 + x, 12 + y), (26 + x, 11 + y)], light)
+        c.facet([(25, 20), (28, 22), (29, 29), (25, 28)], body)
+        c.box(17, 30, 13, 2, GOLD, False)
+        c.box(34, 17, 5, 2, light, False)
+        c.box(36, 21, 3, 3, body, False)
+        c.marks([(9, 24), (10, 30)], PALE)
+    elif species == "chaos_amalgam":
+        c.facet([(32, 8 + y), (36, 15), (33, 20), (29, 17)], light)
+        c.facet([(29, 34), (36, 36), (33, 38)], PALE)
+        c.marks([(9, 15), (15, 16), (17, 13 + y)], shadow, 2)
+        c.marks([(16, 23 + y), (19, 20 + y), (22, 21 + y)], GOLD)
+        c.box(15, 30, 5, 2, PALE, False)
 
     if phase == 1:
         c.gem(24, 4, 2, GOLD)
@@ -371,7 +556,9 @@ def generate(destination=OUTPUT, scene_destination=SCENES):
         if definition["id"] not in PRESERVED:
             (scene_destination / ("enemy_" + definition["id"] + ".tscn")).write_text(scene(definition), encoding="utf-8")
     sheet.save(destination / "contact-sheet.png", compress_level=9)
-    manifest = {"schema_id": "plane_walker_launch_enemy_art_v1", "schema_version": 1, "license": "CC0-1.0", "generator": "tools/production_art/generate_enemy_atlases.py", "source": "data/content_packs/base/content/enemies.json", "phases": list(PHASES), "assets": assets}
+    palette_path = ROOT / "assets/production/palettes/plane_walker_modern.json"
+    manifest = {"schema_id": "plane_walker_launch_enemy_art_v1", "schema_version": 1, "license": "CC0-1.0", "generator": "tools/production_art/generate_enemy_atlases.py", "source": "data/content_packs/base/content/enemies.json", "phases": list(PHASES), "assets": assets,
+                "art_direction": {"light_direction": "top_right", "palette": str(palette_path.relative_to(ROOT)), "palette_sha256": hashlib.sha256(palette_path.read_bytes()).hexdigest()}}
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (destination / "LICENSE.txt").write_text(LICENSE, encoding="utf-8")
 

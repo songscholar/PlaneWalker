@@ -14,6 +14,14 @@ SOURCE = ROOT / "data/content_packs/base/content/enemies.json"
 
 
 class LaunchEnemyArtTest(unittest.TestCase):
+    def test_phase_library_uses_the_shared_binary_pixel_palette(self):
+        palette = json.loads((ROOT / "assets/production/palettes/plane_walker_modern.json").read_text())
+        allowed = {tuple(bytes.fromhex(color[1:])) + (255,) for color in palette["colors"]}
+        for row in json.loads(SOURCE.read_text()):
+            with self.subTest(enemy=row["id"]), Image.open(ASSETS / (row["id"] + ".png")) as image:
+                colors = set(image.get_flattened_data())
+                self.assertTrue(colors <= allowed | {(0, 0, 0, 0)})
+
     def test_complete_unique_visible_phase_library(self):
         definitions = json.loads(SOURCE.read_text())
         manifest = json.loads((ASSETS / "manifest.json").read_text())

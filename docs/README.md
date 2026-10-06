@@ -169,6 +169,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native UI Preparation Audit](current/2026-10-06-native-ui-preparation-evidence.md) | 官方字体版本、哈希和授权读证，49 个界面的现有契约、焦点入口与并行责任边界 | Prepared / UI implementation not started |
 | [Pixel Asset Pipeline](superpowers/specs/2026-10-06-pixel-asset-pipeline-design.md) | 角色、敌人、Boss、武器、效果、房间与 UI 像素资源的确定性生产和验收规范 | Active / Asset batches in progress |
 | [Pixel Production Integration Evidence](current/2026-10-06-pixel-production-integration-evidence.md) | 五角色、五首领与十五外观重绘、完整授权字体、九宫格边框和世界图集路径验证 | Focused Verified / Final certification pending |
+| [Enemy Artwork Integration Evidence](current/2026-10-06-enemy-artwork-integration-evidence.md) | 二十二敌人材质重绘、四个旧场景接入、GLB/FBX 全目录与单资产导出验证 | Focused Verified / Final certification pending |
+| [Boss Native Validation Pass Evidence](current/2026-10-06-boss-native-validation-pass-evidence.md) | 原生冷恢复去除重复校验，保留严格快照边界 | Focused Verified / Per-frame performance pending |
 | [Native Matrix Nested Source Evidence](current/2026-10-06-native-matrix-nested-source-evidence.md) | 嵌套冻结副本的 Git 源码范围修复和原生矩阵启动回归 | Focused Verified / Complete matrix pending |
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
 | [Dungeon Probe Encounter Design](superpowers/specs/2026-10-05-dungeon-probe-native-encounter-design.md) | 合成模拟复用正式遭遇状态机、固定帧与生成及死亡回执 | Approved / Current authority |
