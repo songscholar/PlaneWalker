@@ -84,6 +84,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Matrix Resume Evidence](current/2026-10-06-native-matrix-resume-evidence.md) | 原生矩阵逐案例断点续跑、typed 收据恢复和 SIGKILL 后清洁重试 | Focused Verified / Full matrix pending |
 | [Replay Safety Validator Convergence Evidence](current/2026-10-06-replay-safety-validator-convergence-evidence.md) | Player 回放安全遍历与 live-talent 校验的完整调用收敛及证据边界 | Focused Verified / Full gameplay pending |
 | [Semantic Frame Observation Evidence](current/2026-10-06-semantic-frame-observation-evidence.md) | 语义效果提交使用原生帧边界窄观察，保持完整回滚和错误拒绝 | Focused Verified / Full performance pending |
+| [Rendered Native Performance Evidence](current/2026-10-06-rendered-native-performance-evidence.md) | 后期 Boss 实时渲染帧、物理回放端点和严格双日志测量 | Focused Verified / Frame budget pending |
+| [Boss Action Validator Evidence](current/2026-10-06-boss-action-validator-evidence.md) | Boss 恢复动作模板的单次权威校验与五 Boss 回归证据 | Focused Verified / Full gameplay pending |
 | [Native Hostile Cache Evidence](current/2026-10-06-native-hostile-cache-retention-evidence.md) | 有界目录与动作缓存、原生回归及冻结前后性能对照 | Focused Verified / Performance certification pending |
 | [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |
 | [Native Boss Modifier Teardown Evidence](current/2026-10-06-native-boss-modifier-teardown-evidence.md) | 场景退出时清理首领专属效果、保留其它来源且拒绝离树对象施加新效果 | Focused Verified / Combined certification pending |

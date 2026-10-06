@@ -365,7 +365,7 @@ done
 editor_warning_output="${TEMP_DIR}/editor-warning.out"
 if ! run_fake_validation editor_warning_only "${editor_warning_output}"; then
 	cat "${editor_warning_output}" >&2 || true
-	fail "editor settings write failures must remain an environment warning"
+	fail "editor warning fixture validation failed; see the captured output above"
 fi
 assert_contains "$(cat "${editor_warning_output}")" "cannot persist global Godot editor settings" "editor settings warning classification"
 assert_contains "$(cat "${editor_warning_output}")" "native dependency mocked after clean import" "editor warning fixture reaches the native probe after imports"

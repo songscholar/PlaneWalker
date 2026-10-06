@@ -3,6 +3,7 @@
 - Status: Focused Verified
 - Document Role: Current narrow Boss restore validation optimization evidence
 - Authority Level: Below approved full-product completion contract
+- Depends On: `superpowers/plans/2026-10-06-gameplay-ui-product-completion.md`
 - Applies To: `LaunchBossRuntime._can_restore_snapshot_uncached`
 - Owner: Gameplay performance lane
 - Last Verified: 2026-10-06
