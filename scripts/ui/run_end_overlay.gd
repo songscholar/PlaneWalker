@@ -40,10 +40,14 @@ func _build_graphical_layout() -> void:
 	layout.add_theme_constant_override("separation", 6)
 	result_label.hide()
 	_title = _label("ResultTitle", 18)
+	_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_title.theme_type_variation = &"DisplayLabel"
 	layout.add_child(_title)
 	layout.move_child(_title, restart_button.get_index())
 	_summary = _label("ResultSummary", 11)
+	_summary.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_summary.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	layout.add_child(_summary)
 	layout.move_child(_summary, restart_button.get_index())
 	_scroll = ScrollContainer.new()
@@ -73,6 +77,16 @@ func _fit_panel() -> void:
 	panel.offset_top = -extent.y / 2
 	panel.offset_right = extent.x / 2
 	panel.offset_bottom = extent.y / 2
+	var margin := $Panel/Margin as Control
+	margin.offset_left = 0.0
+	margin.offset_top = 0.0
+	margin.offset_right = extent.x
+	margin.offset_bottom = extent.y
+	var layout := $Panel/Margin/VBox as Control
+	layout.offset_left = 12.0
+	layout.offset_top = 12.0
+	layout.offset_right = maxf(12.0, extent.x - 12.0)
+	layout.offset_bottom = maxf(12.0, extent.y - 12.0)
 
 
 func _label(label_name: String, font_size: int = 12) -> Label:
