@@ -10,3 +10,7 @@
 *.mp3 binary
 *.ttf binary
 *.otf binary
+
+# Preserve the upstream font licenses byte-for-byte, including their whitespace.
+assets/production/fonts/NotoSansSC-OFL.txt -text whitespace=-blank-at-eol
+assets/production/fonts/PixelifySans-OFL.txt -text whitespace=-blank-at-eol

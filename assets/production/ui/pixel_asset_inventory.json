@@ -28,7 +28,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "5e70d14ca14b24c54aea7a805756a996c9647fce7c889301be2f99a77224a1c3"
+          "sha256": "fd4b530bf222ff2df4d6e0702b66dc5e1d2db297257bf12d4cd6df1293dd140d"
         },
         {
           "id": "forge_colossus",
@@ -36,7 +36,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "c7f11f4e1ce43dfe493a9faac2dbb024f1f862436451693bda34fe275459f1c7"
+          "sha256": "b9e3f8c8e1ea7d2187e24b256a6d5f8ef6c673e861f3649af4560ac192ec1e64"
         },
         {
           "id": "primordial_knight",
@@ -44,7 +44,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "d69576ed520532aa0f1ec52a21b85b9caacc1441215daf73080cb29b905a2753"
+          "sha256": "1bfc94af6a02fe543e0e3d7a4c3ec386a9ba8bdd22bdaef8ea1fa9b2491340ff"
         },
         {
           "id": "ruin_king",
@@ -52,7 +52,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "4dfd8ab1555643b570ec31ecffdcd285b65092899567af9a080b294df3c149f2"
+          "sha256": "2aa01704c7e144693ea3a5dd8b17574a26c2b33241d8ee9d7bfe4a62c1ae542e"
         },
         {
           "id": "time_guardian",
@@ -60,7 +60,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "1f25e130570325e0eac6f065e4161c40764dec4a997916d801981be53a878d58"
+          "sha256": "d8505729de86621a1eba41e042d6bbe56b4aa05c9bb62fd88171387cd539216d"
         },
         {
           "id": "time_lord",
@@ -68,7 +68,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "a175fb71656402ffe723a82dd552b1bd6fda93d4dbc53f7a002ae4855ee9946c"
+          "sha256": "f4d2ccbf4006c514b8b32b4240b5b46e6206d59d2441d47a561681aa4a0f8854"
         },
         {
           "id": "time_sovereign",
@@ -76,7 +76,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "d01641bfd1c5c0dbd403c5f66ace3b3248d89513477d02af9020655526503afc"
+          "sha256": "9f2bd677e584a1a3392de9469bd18ab04fdb9e77ee482065a518387441db3b26"
         },
         {
           "id": "void_throne",
@@ -84,7 +84,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "0d5675aa74c4b21fdfc72a46d6b12dd9ee61c6f22c8d2e95c7b44acf952ef289"
+          "sha256": "7311bbffa64bfaf999798176e6211752e7f13b0f70962a0ea88c5a6a80477f20"
         },
         {
           "id": "void_walker",
@@ -92,7 +92,7 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "f27fdcff75162d93a8fcbb0cc89cf0533d1bbbb0bd868079346a7c1ecede753a"
+          "sha256": "01c9da0b126ef2e5a57f7436b8e0571a021cbc25a141a07b5b5ef8a40bf59835"
         },
         {
           "id": "wanderer",
@@ -100,14 +100,14 @@
           "kind": "actors",
           "source_manifest": "actors/manifest.json",
           "filter": "nearest",
-          "sha256": "4d7d0c81429d16b192262069e36229bbb0225cfc2fb7a25e9ba95ffe96f62041"
+          "sha256": "59ec023b5557bb30e613ded3be7d725c78adc1212c1219c0726dc279287f3cf2"
         }
       ]
     },
     {
       "id": "enemies",
       "status": "generated",
-      "scope": "five basic enemies",
+      "scope": "twenty-two launch enemy phase atlases",
       "assets": [
         {
           "id": "shattered_sentinel",
@@ -148,6 +148,142 @@
           "source_manifest": "enemies/manifest.json",
           "filter": "nearest",
           "sha256": "2b8d017faf87b223618bad9095bc968ae1d05c461e016a5bc07605c39ee42c75"
+        },
+        {
+          "id": "void_hunter",
+          "path": "enemies/void_hunter.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "93523df6d8c6f4807d7ea2d51889a118a16f5a362699038f61238a613d72141b"
+        },
+        {
+          "id": "void_archer",
+          "path": "enemies/void_archer.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "4b9bb9f377542cb5ccee803dc3eb6e9d01554c56c00961d8041c529a2ccc9b99"
+        },
+        {
+          "id": "bramble_mage",
+          "path": "enemies/bramble_mage.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "14a8f21afad55857b1f171db057b6d93f730619f359567f486f241c443c04ed5"
+        },
+        {
+          "id": "void_spore",
+          "path": "enemies/void_spore.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "1a5abd97142648dd4b87f2572eef42a0d257f5828c636e41dbef2b73a2fa6797"
+        },
+        {
+          "id": "forest_caller",
+          "path": "enemies/forest_caller.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "19ba7c37e7c4f2ec10ffd448796fa076bc7d8c37f587dc3599edc4f1cf16ff25"
+        },
+        {
+          "id": "shadow_lurker",
+          "path": "enemies/shadow_lurker.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "9bdc9357eee1018aa01768a5f9eb8de0a873996a622f60aed6b6c0d87875fd8b"
+        },
+        {
+          "id": "chrono_guard",
+          "path": "enemies/chrono_guard.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "3fa9baf3eef6f9b453ac188cec706bb2493f5480008bce91b6321a698d9176b7"
+        },
+        {
+          "id": "rift_weaver",
+          "path": "enemies/rift_weaver.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "e9222ac84e2be2042bced9b51eff246ee236af66af9cb382139010bc3bc32abd"
+        },
+        {
+          "id": "blink_striker",
+          "path": "enemies/blink_striker.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "ecbfb9f5c57f54f12214a644a3c92a9a90154908a1742c5fb3bc7fe5e812e584"
+        },
+        {
+          "id": "rewind_priest",
+          "path": "enemies/rewind_priest.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "11e34c9696dab25d70eb550fee7e82f22cfcaa051d3397a40c050d76680dac33"
+        },
+        {
+          "id": "chrono_storm_elemental",
+          "path": "enemies/chrono_storm_elemental.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "abf7cecbbbc091588c736b56c0274205d39f229bc5be985c52fd0994df24f4ff"
+        },
+        {
+          "id": "eternal_hound",
+          "path": "enemies/eternal_hound.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "dbadf2406b4122a731448ebb93ea3d4fa0cc920b037622bdaeebe8e38fb66f6a"
+        },
+        {
+          "id": "forge_titan",
+          "path": "enemies/forge_titan.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "86409d4917963fdb943eaa85799a06e3ebe196f95784cb0a0176e160b88dae50"
+        },
+        {
+          "id": "void_web_weaver",
+          "path": "enemies/void_web_weaver.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "b9f27350949bfd4ca1b939dc54aa9dc7be1bc520b34a0cc57f486e5022fd04af"
+        },
+        {
+          "id": "phase_ranger",
+          "path": "enemies/phase_ranger.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "e7930c7c29c7aecb559ea43960f98e2739af0386cf39a33e9ce76b791d0f9e15"
+        },
+        {
+          "id": "chaos_amalgam",
+          "path": "enemies/chaos_amalgam.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "394e90ea91352445b0b6d330f0c93dc7c72d9b84ada56fd196960fa32bb4428e"
+        },
+        {
+          "id": "plane_ripper",
+          "path": "enemies/plane_ripper.png",
+          "kind": "enemies",
+          "source_manifest": "enemies/manifest.json",
+          "filter": "nearest",
+          "sha256": "c7577174f8318b6a6a282c6076eb998b4e06efbaf4b94441fd8ddf76f3498e1e"
         }
       ]
     },
@@ -2184,26 +2320,88 @@
           "frame_count": 4,
           "filter": "nearest",
           "sha256": "fe14b8a448e59d9f6c71d423af4b62014f69126b0805769b0986d7dcc5d18c91"
+        },
+        {
+          "id": "chrome_panel",
+          "path": "final_ui_frames/chrome_panel.png",
+          "kind": "final_ui_frames",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "329cc1d6df7df01d97b79e0da924594ecaa8a9268c00590dd5cfa7eb44415c31"
+        },
+        {
+          "id": "chrome_button",
+          "path": "final_ui_frames/chrome_button.png",
+          "kind": "final_ui_frames",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "329cc1d6df7df01d97b79e0da924594ecaa8a9268c00590dd5cfa7eb44415c31"
+        },
+        {
+          "id": "chrome_focus",
+          "path": "final_ui_frames/chrome_focus.png",
+          "kind": "final_ui_frames",
+          "width": 128,
+          "height": 32,
+          "frame_width": 32,
+          "frame_height": 32,
+          "frame_count": 4,
+          "filter": "nearest",
+          "sha256": "fe1ce82b0b2f302cf6f1b5759f9ea07ae28650dca215b80ad4d440cdc3028ac7"
         }
       ]
     },
     {
       "id": "font",
-      "status": "fallback",
-      "scope": "Godot theme/system font remains the authoritative fallback",
-      "assets": [],
-      "fallback": "system_font"
+      "status": "vendored",
+      "scope": "OFL licensed Noto Sans SC body and Pixelify Sans Latin display fonts",
+      "assets": [
+        {
+          "id": "noto_sans_sc_regular",
+          "family": "Noto Sans SC",
+          "version": "2.004-H2",
+          "weight": 400,
+          "path": "../fonts/NotoSansSC-Regular.ttf",
+          "bytes": 10540644,
+          "sha256": "450625c8d46ab3df97b7904ded955ec2746d17ec76740cb1e91d1ba63a0f89af",
+          "source": "https://fonts.gstatic.com/s/notosanssc/v41/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYw.ttf",
+          "source_catalog": "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400&family=Pixelify+Sans:wght@400",
+          "license_path": "../fonts/NotoSansSC-OFL.txt",
+          "license_sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+          "license_source": "https://github.com/google/fonts/blob/main/ofl/notosanssc/OFL.txt",
+          "codepoints": 30890,
+          "role": "Simplified Chinese and body text",
+          "kind": "font"
+        },
+        {
+          "id": "pixelify_sans_regular",
+          "family": "Pixelify Sans",
+          "version": "1.000",
+          "weight": 400,
+          "path": "../fonts/PixelifySans-Regular.ttf",
+          "bytes": 49840,
+          "sha256": "616f3be4921e2e79ad58fc15fcfd0b3c3508a615811b1a518130d623030764e9",
+          "source": "https://fonts.gstatic.com/s/pixelifysans/v3/CHy2V-3HFUT7aC4iv1TxGDR9DHEserHN25py2TTp0H1Y.ttf",
+          "source_catalog": "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400&family=Pixelify+Sans:wght@400",
+          "license_path": "../fonts/PixelifySans-OFL.txt",
+          "license_sha256": "b66ba46f511a851ab09998b5a5a9fdbb102545a3864cb993095e1745996873a7",
+          "license_source": "https://github.com/google/fonts/blob/main/ofl/pixelifysans/OFL.txt",
+          "codepoints": 574,
+          "role": "Latin display text with Noto Sans SC fallback",
+          "kind": "font"
+        }
+      ]
     }
   ],
   "contact_sheet": "pixel_asset_contact_sheet.png",
-  "uncompleted_batches": [
-    "font"
-  ],
-  "fallbacks": [
-    {
-      "batch": "font",
-      "source": "Godot theme/system font",
-      "reason": "No bundled font file is required for the current offline slice."
-    }
-  ]
+  "uncompleted_batches": [],
+  "fallbacks": []
 }

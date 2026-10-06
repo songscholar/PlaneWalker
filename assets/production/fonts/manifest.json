@@ -1,0 +1,40 @@
+{
+  "schema_id": "plane_walker_font_assets_v1",
+  "last_verified": "2026-10-06",
+  "license": "OFL-1.1",
+  "modified": false,
+  "assets": [
+    {
+      "id": "noto_sans_sc_regular",
+      "family": "Noto Sans SC",
+      "version": "2.004-H2",
+      "weight": 400,
+      "path": "NotoSansSC-Regular.ttf",
+      "bytes": 10540644,
+      "sha256": "450625c8d46ab3df97b7904ded955ec2746d17ec76740cb1e91d1ba63a0f89af",
+      "source": "https://fonts.gstatic.com/s/notosanssc/v41/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYw.ttf",
+      "source_catalog": "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400&family=Pixelify+Sans:wght@400",
+      "license_path": "NotoSansSC-OFL.txt",
+      "license_sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+      "license_source": "https://github.com/google/fonts/blob/main/ofl/notosanssc/OFL.txt",
+      "codepoints": 30890,
+      "role": "Simplified Chinese and body text"
+    },
+    {
+      "id": "pixelify_sans_regular",
+      "family": "Pixelify Sans",
+      "version": "1.000",
+      "weight": 400,
+      "path": "PixelifySans-Regular.ttf",
+      "bytes": 49840,
+      "sha256": "616f3be4921e2e79ad58fc15fcfd0b3c3508a615811b1a518130d623030764e9",
+      "source": "https://fonts.gstatic.com/s/pixelifysans/v3/CHy2V-3HFUT7aC4iv1TxGDR9DHEserHN25py2TTp0H1Y.ttf",
+      "source_catalog": "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400&family=Pixelify+Sans:wght@400",
+      "license_path": "PixelifySans-OFL.txt",
+      "license_sha256": "b66ba46f511a851ab09998b5a5a9fdbb102545a3864cb993095e1745996873a7",
+      "license_source": "https://github.com/google/fonts/blob/main/ofl/pixelifysans/OFL.txt",
+      "codepoints": 574,
+      "role": "Latin display text with Noto Sans SC fallback"
+    }
+  ]
+}

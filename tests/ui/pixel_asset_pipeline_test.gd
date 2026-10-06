@@ -8,7 +8,7 @@ const REQUIRED := {
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
-	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor"],
+	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
 const CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
 
@@ -48,6 +48,14 @@ func _run() -> void:
 				break
 		suite.assert_equal(found.get("status", ""), "generated", "%s content icons are generated" % batch_id)
 		suite.assert_true((found.get("assets", []) as Array).size() > 0, "%s content icon batch is non-empty" % batch_id)
+	for batch_id: String in ["actors", "enemies", "rooms"]:
+		for batch_value: Variant in inventory.get("batches", []):
+			if not batch_value is Dictionary or str(batch_value.get("id", "")) != batch_id:
+				continue
+			for row: Dictionary in batch_value.get("assets", []):
+				var path := Catalog.texture_path(StringName(batch_id), StringName(row.id))
+				suite.assert_true(FileAccess.file_exists(path), "existing world atlas resolves outside UI directory: " + path)
+				suite.assert_equal(FileAccess.get_sha256(path), row.sha256, "existing world atlas is authenticated: " + path)
 	var glyph_families: Dictionary = {}
 	for batch_id: String in CONTENT_BATCHES + ["mode_art"]:
 		for batch_value: Variant in inventory.get("batches", []):
@@ -57,11 +65,15 @@ func _run() -> void:
 				if asset_value is Dictionary and asset_value.has("glyph_family"):
 					glyph_families[int(asset_value.glyph_family)] = true
 	suite.assert_true(glyph_families.size() >= 12, "content and mode icon batches expose twelve semantic glyph families")
-	var font_fallback: Dictionary = {}
+	var font_batch: Dictionary = {}
 	for batch_value: Variant in inventory.get("batches", []):
 		if batch_value is Dictionary and str(batch_value.get("id", "")) == "font":
-			font_fallback = batch_value
+			font_batch = batch_value
 			break
-	suite.assert_equal(font_fallback.get("status", ""), "fallback", "font batch states its system fallback")
-	suite.assert_equal(font_fallback.get("fallback", ""), "system_font", "font fallback is explicit")
+	suite.assert_equal(font_batch.get("status", ""), "vendored", "font batch is bundled for offline distribution")
+	for font_id: String in ["noto_sans_sc_regular", "pixelify_sans_regular"]:
+		var font := load(Catalog.texture_path(&"font", StringName(font_id))) as Font
+		suite.assert_true(font != null and font.has_char(65), "bundled font covers Latin text: " + font_id)
+		if font != null and font_id == "noto_sans_sc_regular":
+			suite.assert_true(font.has_char(0x65F6) and font.has_char(0x7A7A), "bundled body font covers Chinese time and space glyphs")
 	suite.finish(get_tree())

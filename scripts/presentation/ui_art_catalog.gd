@@ -8,7 +8,7 @@ const REQUIRED_GENERATED := {
 	"time_abilities": ["stop", "rewind", "accelerate", "rift"],
 	"player_effects": ["weapon_arc", "arrow_trail", "muzzle_flash", "spell_burst", "time_ring", "rift_bloom"],
 	"mode_art": ["boss_rush", "daily_boss", "authored_challenges", "training", "endless"],
-	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor"],
+	"final_ui_frames": ["panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus"],
 }
 const REQUIRED_CONTENT_BATCHES := ["items", "blessings", "curses", "talents"]
 
@@ -35,6 +35,8 @@ static func texture_path(batch_id: StringName, asset_id: StringName) -> String:
 	var value := asset(batch_id, asset_id)
 	if value.is_empty():
 		return ""
+	if value.has("source_manifest"):
+		return "res://assets/production/" + str(value.get("path", ""))
 	return ROOT_PATH + str(value.get("path", ""))
 
 
@@ -75,4 +77,14 @@ static func validate() -> Dictionary:
 				break
 		if not found:
 			errors.append("missing content batch: %s" % batch_id)
+	for font_id: String in ["noto_sans_sc_regular", "pixelify_sans_regular"]:
+		var font := asset(&"font", StringName(font_id))
+		if font.is_empty():
+			errors.append("missing bundled font: %s" % font_id)
+			continue
+		for path_field: String in ["path", "license_path"]:
+			var font_path := ROOT_PATH + str(font.get(path_field, ""))
+			var digest_field := "sha256" if path_field == "path" else "license_sha256"
+			if not FileAccess.file_exists(font_path) or FileAccess.get_sha256(font_path) != str(font.get(digest_field, "")):
+				errors.append("bundled font or license hash mismatch: %s" % font_path)
 	return {"ok": errors.is_empty(), "errors": errors, "inventory": inventory}

@@ -45,7 +45,7 @@ CONTENT_SOURCES = {
     "talents": ROOT / "data" / "content_packs" / "base" / "content" / "talents.json",
 }
 MODE_ART = ("boss_rush", "daily_boss", "authored_challenges", "training", "endless")
-UI_FRAMES = ("panel", "panel_active", "panel_danger", "divider", "badge", "cursor")
+UI_FRAMES = ("panel", "panel_active", "panel_danger", "divider", "badge", "cursor", "chrome_panel", "chrome_button", "chrome_focus")
 
 LICENSE = """Plane Walker Original UI Art Slice
 
@@ -300,6 +300,19 @@ def ui_frame(asset_id: str, frame: int) -> Image.Image:
     image, draw = _canvas()
     ink, stone, edge = PALETTE["ink"], PALETTE["stone"], PALETTE["edge"]
     time, brass = PALETTE["time"], PALETTE["brass"]
+    if asset_id.startswith("chrome_"):
+        focus = asset_id == "chrome_focus"
+        border = PALETTE["patina"] if focus else edge
+        draw.rectangle((1, 1, 30, 30), fill=None if focus else ink, outline=border)
+        if not focus:
+            draw.rectangle((2, 2, 29, 29), outline=stone)
+            draw.line([(4, 2), (27, 2)], fill=edge)
+            draw.line([(4, 29), (27, 29)], fill=stone)
+        for x, y in ((1, 1), (28, 1), (1, 28), (28, 28)):
+            draw.rectangle((x, y, x + 2, y + 2), fill=border)
+            draw.point((x + 1, y + 1), fill=brass if frame % 2 == 0 else border)
+        draw.line([(7 + frame * 4, 1), (9 + frame * 4, 1)], fill=time if focus else brass)
+        return image
     if asset_id == "divider":
         draw.rectangle((4, 14, 27, 17), fill=ink)
         draw.rectangle((6, 15, 25, 16), fill=time)
@@ -421,9 +434,11 @@ def generate(destination: Path = OUTPUT) -> None:
             row["glyph_family"] = glyph_family(str(row["kind"]), str(row["id"]))
 
     production_root = ROOT / "assets" / "production"
+    font_manifest = json.loads((production_root / "fonts/manifest.json").read_text())
+    fonts = [{**row, "path": "../fonts/" + row["path"], "license_path": "../fonts/" + row["license_path"], "kind": "font"} for row in font_manifest["assets"]]
     existing: list[dict] = []
     existing += _existing_inventory(production_root, "actors", tuple(), "manifest.json")
-    existing += _existing_inventory(production_root, "enemies", tuple(row["id"] for row in json.loads((production_root / "enemies" / "manifest.json").read_text()).get("assets", [])[:5]), "manifest.json")
+    existing += _existing_inventory(production_root, "enemies", tuple(), "manifest.json")
     existing += _existing_inventory(production_root, "rooms", tuple(), "manifest.json", "path")
     _contact_sheet(destination, generated, existing)
 
@@ -435,7 +450,7 @@ def generate(destination: Path = OUTPUT) -> None:
         "palette": {key: "#%02x%02x%02x" % value[:3] for key, value in PALETTE.items()},
         "batches": [
             {"id": "actors", "status": "generated", "scope": "five players and five bosses", "assets": [row for row in existing if row["kind"] == "actors"]},
-            {"id": "enemies", "status": "generated", "scope": "five basic enemies", "assets": [row for row in existing if row["kind"] == "enemies"]},
+            {"id": "enemies", "status": "generated", "scope": "twenty-two launch enemy phase atlases", "assets": [row for row in existing if row["kind"] == "enemies"]},
             {"id": "rooms", "status": "generated", "scope": "room tiles, walls, doors and landmarks", "assets": [row for row in existing if row["kind"] == "rooms"]},
             {"id": "weapons", "status": "generated", "scope": "five weapon icons", "assets": [row for row in generated if row["kind"] == "weapons"]},
             {"id": "time_abilities", "status": "generated", "scope": "four time ability icons", "assets": [row for row in generated if row["kind"] == "time_abilities"]},
@@ -446,11 +461,11 @@ def generate(destination: Path = OUTPUT) -> None:
             {"id": "talents", "status": "generated", "scope": "authoritative talent icon atlas", "assets": [row for row in generated if row["kind"] == "talents"]},
             {"id": "mode_art", "status": "generated", "scope": "mode entry icon atlas", "assets": [row for row in generated if row["kind"] == "mode_art"]},
             {"id": "final_ui_frames", "status": "generated", "scope": "panel, divider, badge and cursor frame atlas", "assets": [row for row in generated if row["kind"] == "final_ui_frames"]},
-            {"id": "font", "status": "fallback", "scope": "Godot theme/system font remains the authoritative fallback", "assets": [], "fallback": "system_font"},
+            {"id": "font", "status": "vendored", "scope": "OFL licensed Noto Sans SC body and Pixelify Sans Latin display fonts", "assets": fonts},
         ],
         "contact_sheet": "pixel_asset_contact_sheet.png",
-        "uncompleted_batches": ["font"],
-        "fallbacks": [{"batch": "font", "source": "Godot theme/system font", "reason": "No bundled font file is required for the current offline slice."}],
+        "uncompleted_batches": [],
+        "fallbacks": [],
     }
     (destination / "pixel_asset_inventory.json").write_text(json.dumps(inventory, indent=2) + "\n")
     (destination / "LICENSE.txt").write_text(LICENSE)

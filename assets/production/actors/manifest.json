@@ -1,4 +1,9 @@
 {
+  "art_direction": {
+    "light_direction": "top_right",
+    "palette": "assets/production/palettes/plane_walker_modern.json",
+    "palette_sha256": "d31c708c8d0bebd8a0f9e521f0be2aaecbee16d4957632e0b3a0aea7683c1d2e"
+  },
   "assets": [
     {
       "columns": 4,
@@ -20,7 +25,7 @@
       "kind": "boss",
       "path": "forest_heart.png",
       "rows": 6,
-      "sha256": "5e70d14ca14b24c54aea7a805756a996c9647fce7c889301be2f99a77224a1c3",
+      "sha256": "fd4b530bf222ff2df4d6e0702b66dc5e1d2db297257bf12d4cd6df1293dd140d",
       "width": 320
     },
     {
@@ -43,7 +48,7 @@
       "kind": "boss",
       "path": "forge_colossus.png",
       "rows": 6,
-      "sha256": "c7f11f4e1ce43dfe493a9faac2dbb024f1f862436451693bda34fe275459f1c7",
+      "sha256": "b9e3f8c8e1ea7d2187e24b256a6d5f8ef6c673e861f3649af4560ac192ec1e64",
       "width": 320
     },
     {
@@ -66,7 +71,7 @@
       "kind": "character",
       "path": "primordial_knight.png",
       "rows": 6,
-      "sha256": "d69576ed520532aa0f1ec52a21b85b9caacc1441215daf73080cb29b905a2753",
+      "sha256": "1bfc94af6a02fe543e0e3d7a4c3ec386a9ba8bdd22bdaef8ea1fa9b2491340ff",
       "width": 192
     },
     {
@@ -89,7 +94,7 @@
       "kind": "boss",
       "path": "ruin_king.png",
       "rows": 6,
-      "sha256": "4dfd8ab1555643b570ec31ecffdcd285b65092899567af9a080b294df3c149f2",
+      "sha256": "2aa01704c7e144693ea3a5dd8b17574a26c2b33241d8ee9d7bfe4a62c1ae542e",
       "width": 320
     },
     {
@@ -112,7 +117,7 @@
       "kind": "character",
       "path": "time_guardian.png",
       "rows": 6,
-      "sha256": "1f25e130570325e0eac6f065e4161c40764dec4a997916d801981be53a878d58",
+      "sha256": "d8505729de86621a1eba41e042d6bbe56b4aa05c9bb62fd88171387cd539216d",
       "width": 192
     },
     {
@@ -135,7 +140,7 @@
       "kind": "character",
       "path": "time_lord.png",
       "rows": 6,
-      "sha256": "a175fb71656402ffe723a82dd552b1bd6fda93d4dbc53f7a002ae4855ee9946c",
+      "sha256": "f4d2ccbf4006c514b8b32b4240b5b46e6206d59d2441d47a561681aa4a0f8854",
       "width": 192
     },
     {
@@ -158,7 +163,7 @@
       "kind": "boss",
       "path": "time_sovereign.png",
       "rows": 6,
-      "sha256": "d01641bfd1c5c0dbd403c5f66ace3b3248d89513477d02af9020655526503afc",
+      "sha256": "9f2bd677e584a1a3392de9469bd18ab04fdb9e77ee482065a518387441db3b26",
       "width": 320
     },
     {
@@ -181,7 +186,7 @@
       "kind": "boss",
       "path": "void_throne.png",
       "rows": 6,
-      "sha256": "0d5675aa74c4b21fdfc72a46d6b12dd9ee61c6f22c8d2e95c7b44acf952ef289",
+      "sha256": "7311bbffa64bfaf999798176e6211752e7f13b0f70962a0ea88c5a6a80477f20",
       "width": 320
     },
     {
@@ -204,7 +209,7 @@
       "kind": "character",
       "path": "void_walker.png",
       "rows": 6,
-      "sha256": "f27fdcff75162d93a8fcbb0cc89cf0533d1bbbb0bd868079346a7c1ecede753a",
+      "sha256": "01c9da0b126ef2e5a57f7436b8e0571a021cbc25a141a07b5b5ef8a40bf59835",
       "width": 192
     },
     {
@@ -227,7 +232,7 @@
       "kind": "character",
       "path": "wanderer.png",
       "rows": 6,
-      "sha256": "4d7d0c81429d16b192262069e36229bbb0225cfc2fb7a25e9ba95ffe96f62041",
+      "sha256": "59ec023b5557bb30e613ded3be7d725c78adc1212c1219c0726dc279287f3cf2",
       "width": 192
     }
   ],
@@ -238,7 +243,7 @@
     },
     {
       "path": "contact_sheet.png",
-      "sha256": "3dcf6660a105091c39779617c33925516e8efb61bbfeae31b23d80614b4f6a76"
+      "sha256": "c9079946453969175da4b7308ee883b7c10bf2e246d4789be60a085199dcf0cc"
     }
   ],
   "provenance": {

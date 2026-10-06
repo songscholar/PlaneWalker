@@ -1,7 +1,7 @@
 [
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/wanderer_default.png",
-    "atlas_sha256": "4d7d0c81429d16b192262069e36229bbb0225cfc2fb7a25e9ba95ffe96f62041",
+    "atlas_sha256": "59ec023b5557bb30e613ded3be7d725c78adc1212c1219c0726dc279287f3cf2",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -23,7 +23,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/wanderer_return.png",
-    "atlas_sha256": "0d2c3865154de637cbaf6223f56fd04653d8cdfd1ab81194e83041e7b900f233",
+    "atlas_sha256": "742b67cabe1f9343e013488bf0c197ff6aaa6ac0148b043544201e243725e226",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -45,7 +45,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/wanderer_victory.png",
-    "atlas_sha256": "c69f730093813905675ab659b596156ece1132586d44f75bc231a452d4e24feb",
+    "atlas_sha256": "105842c8061a5e1e489d98ed5c567c8f9cd806c3d31e5ce2d969b29dfef31b22",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -67,7 +67,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_guardian_default.png",
-    "atlas_sha256": "1f25e130570325e0eac6f065e4161c40764dec4a997916d801981be53a878d58",
+    "atlas_sha256": "d8505729de86621a1eba41e042d6bbe56b4aa05c9bb62fd88171387cd539216d",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -89,7 +89,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_guardian_return.png",
-    "atlas_sha256": "1fb369a4fe86ad122c7a56d6e5a7cb6e017bdfb64c7b5f4a2adf0853916801f1",
+    "atlas_sha256": "60a2fe5eac1e133db5abfaf7cb5d9b3cbb60ca3286cf203537084cd54ca808a8",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -111,7 +111,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_guardian_victory.png",
-    "atlas_sha256": "f2fcd17be585512bc5b5e6c307187938866a94680b42b5a71fd6d03607929f6a",
+    "atlas_sha256": "a0dc0318481634893ecd3db4e0cc966af605a7725bc2bfef93c2cf65345d9f01",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -133,7 +133,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/void_walker_default.png",
-    "atlas_sha256": "f27fdcff75162d93a8fcbb0cc89cf0533d1bbbb0bd868079346a7c1ecede753a",
+    "atlas_sha256": "01c9da0b126ef2e5a57f7436b8e0571a021cbc25a141a07b5b5ef8a40bf59835",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -155,7 +155,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/void_walker_return.png",
-    "atlas_sha256": "5d4b691b81a93188ad534d203e4fb7f1457e38f34bce98997362424c0376518b",
+    "atlas_sha256": "26001509b932d27aa6842595462463cc1b34c1fbcbf375dabd61e32b4b4688f3",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -177,7 +177,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/void_walker_victory.png",
-    "atlas_sha256": "282d464b48a04f83a35f299008270b4f5a4826e17b10088ff1be485e18e1a306",
+    "atlas_sha256": "848d67a46e875ff731e519939ce8fe1a68de1a9204832685075c3bab19392c9b",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -199,7 +199,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/primordial_knight_default.png",
-    "atlas_sha256": "d69576ed520532aa0f1ec52a21b85b9caacc1441215daf73080cb29b905a2753",
+    "atlas_sha256": "1bfc94af6a02fe543e0e3d7a4c3ec386a9ba8bdd22bdaef8ea1fa9b2491340ff",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -221,7 +221,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/primordial_knight_return.png",
-    "atlas_sha256": "fa307b0634abc3705a50b88dc9d5b4a896c91bb3e8787ded4d3f11f893e5525e",
+    "atlas_sha256": "22ecc1f67857795b38db9ce7ff192d3941af8292140b73641d045e81416b2337",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -243,7 +243,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/primordial_knight_victory.png",
-    "atlas_sha256": "d4489353c17ac7a03c9113c52b6778573ef185c1b1ae5bff31a561a494b35f64",
+    "atlas_sha256": "3259bdedfcab7860e31c71be707b3efa15272ca54d7c8ad41eaddcb5de802544",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -265,7 +265,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_lord_default.png",
-    "atlas_sha256": "a175fb71656402ffe723a82dd552b1bd6fda93d4dbc53f7a002ae4855ee9946c",
+    "atlas_sha256": "f4d2ccbf4006c514b8b32b4240b5b46e6206d59d2441d47a561681aa4a0f8854",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -287,7 +287,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_lord_return.png",
-    "atlas_sha256": "16e83faa3230b299dd161fa9ca36c55020b65c96d6541f2f1ee6f9d516e0fcc6",
+    "atlas_sha256": "d444f7c27c97e151b123c88b8642aa246f2bb41dc0efacdf52654f095a2e6197",
     "availability": [
       "LAUNCH",
       "EXPANSION"
@@ -309,7 +309,7 @@
   },
   {
     "atlas_path": "res://data/content_packs/base/assets/cosmetics/time_lord_victory.png",
-    "atlas_sha256": "74a0b839bf4b4542372a26fa5f7bccd433c3cdb6b7e0e7d4642af8df70652277",
+    "atlas_sha256": "f6fa93ffaf10f3bf825442414fe7bc92ee4a83b005953f0fc64a0f0f6277ae35",
     "availability": [
       "LAUNCH",
       "EXPANSION"

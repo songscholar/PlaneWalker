@@ -15,6 +15,27 @@ import generate_actor_atlases as art
 
 
 class ProductionActorAtlasesTest(unittest.TestCase):
+    def test_runtime_pixels_use_locked_palette_and_binary_alpha(self):
+        palette = json.loads((ROOT / "assets/production/palettes/plane_walker_modern.json").read_text())
+        colors = {tuple(bytes.fromhex(color[1:])) for color in palette["colors"]}
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = art.generate(Path(directory))
+            self.assertEqual(manifest["art_direction"]["light_direction"], "top_right")
+            for row in manifest["assets"]:
+                with self.subTest(actor=row["id"]), Image.open(Path(directory) / row["path"]) as atlas:
+                    pixels = list(atlas.get_flattened_data())
+                    self.assertTrue(all(pixel[3] in (0, 255) for pixel in pixels))
+                    self.assertTrue({pixel[:3] for pixel in pixels if pixel[3]} <= colors)
+
+    def test_player_attack_moves_articulated_limbs_beyond_body_lean(self):
+        for actor in art.CHARACTERS:
+            with self.subTest(actor=actor):
+                idle = art.character(actor, "idle", 0)
+                attack = art.character(actor, "attack", 2)
+                idle_hand = idle.crop((33, 18, 43, 31)).getchannel("A")
+                attack_hand = attack.crop((33, 18, 43, 31)).getchannel("A")
+                self.assertGreater(sum(attack_hand.get_flattened_data()), sum(idle_hand.get_flattened_data()))
+
     def test_library_covers_actual_launch_identities_and_frame_states(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
